@@ -71,3 +71,8 @@ export const WALK_BOB_AMPLITUDE = 0.04; // scale.y oscillation while walking
 // Camera smoothing: higher = snappier follow. Time-based so it's framerate-independent.
 // f = 1 - exp(-RATE * dt). At 60fps with RATE=10, f ≈ 0.155 per frame.
 export const CAMERA_SMOOTHING_RATE = 10;
+
+// Landmark interaction zone: half-extents (in logical pixels) around the
+// landmark's visual center. Player center inside this rectangle = can interact.
+export const LANDMARK_INTERACT_RANGE_X = 16;
+export const LANDMARK_INTERACT_RANGE_Y = 20;

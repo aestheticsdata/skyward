@@ -74,3 +74,4 @@ export class Input {
 export const KEYS_LEFT = ['ArrowLeft', 'KeyA', 'KeyQ'] as const;
 export const KEYS_RIGHT = ['ArrowRight', 'KeyD'] as const;
 export const KEYS_JUMP = ['Space', 'ArrowUp', 'KeyW', 'KeyZ'] as const;
+export const KEYS_INTERACT = ['KeyE'] as const;

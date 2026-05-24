@@ -46,10 +46,13 @@ export class Camera {
   }
 
   // Apply the inverse of pos as a translation on the world container.
-  // Rounding to integer keeps the upscaled pixel art crisp.
+  // Position is kept as a float — the Application's roundPixels setting
+  // rounds at render time. Rounding here as well would cause sub-pixel
+  // jitter on entities inside the container (because their own positions
+  // also get rounded, and two independent roundings don't align frame-to-frame).
   applyTo(container: Container): void {
-    container.x = -Math.round(this.pos.x);
-    container.y = -Math.round(this.pos.y);
+    container.x = -this.pos.x;
+    container.y = -this.pos.y;
   }
 }
 

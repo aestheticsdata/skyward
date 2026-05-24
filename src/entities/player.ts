@@ -104,9 +104,13 @@ export class Player implements Body {
   }
 
   // The sprite is positioned at the body's bottom-center to match its pivot.
+  // Position is kept as floats here — the PixiJS Application has roundPixels
+  // enabled, which rounds renderables once at render time. Rounding here as
+  // well would compound with the camera/world container's own rounding and
+  // produce a 1-pixel horizontal jitter during smooth scrolling.
   private syncSprite(): void {
-    this.sprite.x = Math.round(this.pos.x + this.size.x / 2);
-    this.sprite.y = Math.round(this.pos.y + this.size.y);
+    this.sprite.x = this.pos.x + this.size.x / 2;
+    this.sprite.y = this.pos.y + this.size.y;
     this.sprite.scale.set(this.facing, this.computeScaleY());
   }
 

@@ -57,9 +57,11 @@ export class ParallaxBackground {
   }
 
   update(camera: Camera): void {
+    // Float positions — the Application's roundPixels rounds once at render
+    // time. See camera.ts / player.ts for the same reasoning.
     for (const layer of this.layers) {
-      layer.graphics.x = -Math.round(camera.pos.x * layer.scrollFactor);
-      layer.graphics.y = -Math.round(camera.pos.y * layer.scrollFactor);
+      layer.graphics.x = -camera.pos.x * layer.scrollFactor;
+      layer.graphics.y = -camera.pos.y * layer.scrollFactor;
     }
   }
 

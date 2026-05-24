@@ -1,0 +1,26 @@
+{
+  "name": "the-cartographer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "A 16-bit-style exploration platformer in TypeScript + PixiJS",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "check": "biome check",
+    "check:fix": "biome check --write",
+    "format": "biome format --write",
+    "lint": "biome lint"
+  },
+  "dependencies": {
+    "pixi.js": "^8.6.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.15",
+    "@types/node": "^25.9.1",
+    "typescript": "^5.6.0",
+    "vite": "^5.4.0"
+  }
+}

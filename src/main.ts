@@ -20,6 +20,13 @@ async function main(): Promise<void> {
   if (!appEl) throw new Error('No #app element in index.html');
   appEl.appendChild(app.canvas);
 
+  // Hide the mouse cursor over the play area. Pixi's EventSystem sets the
+  // canvas cursor whenever it processes a pointer event, so a CSS rule alone
+  // can lose the race. Setting both the inline style and Pixi's default
+  // cursorStyle wins in both paths.
+  app.canvas.style.cursor = 'none';
+  app.renderer.events.cursorStyles.default = 'none';
+
   const game = new Game(app);
   game.start();
 

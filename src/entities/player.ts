@@ -10,6 +10,12 @@ import { Graphics } from 'pixi.js';
 // per second. Tweak if the cadence feels off vs WALK_SPEED.
 const WALK_CYCLE_FREQ = 8;
 
+// Horizontal distance (logical px) covered between two footstep SFX. The
+// visual stride is sin-driven and irregular near the extremes, but audio
+// cadence reads as wrong if it varies — so audio fires on raw distance, not
+// on sin phase. At WALK_SPEED = 96 px/s, 20 px gives a step every ~0.21 s.
+const FOOTSTEP_DISTANCE = 20;
+
 // Procedural figure. Geometry is redrawn from scratch every frame so that the
 // feet, arm, and body-bob can animate as pure integer-pixel offsets — no
 // `scale` tricks, which would break pixel-art rendering for a fractional
@@ -41,10 +47,11 @@ export class Player implements Body {
   // Animation state.
   private facing: 1 | -1 = 1;
   private elapsedTime = 0;
-  // Current/previous quantized step offset, used both by the draw code and
-  // by footstep detection. -1 / 0 / +1.
+  // Quantized step offset (-1 / 0 / +1) — drives the visual stride only.
   private stepOffset = 0;
-  private prevStepOffset = 0;
+  // Distance traveled since the last footstep SFX. Independent of the sin
+  // phase so the audio cadence stays regular.
+  private footstepAccumulator = 0;
 
   constructor(x: number, y: number) {
     this.pos = { x, y };
@@ -104,15 +111,23 @@ export class Player implements Body {
       this.didLandThisFrame = true;
     }
 
-    // 8. Update the walk-cycle stepOffset. A footstep "fires" when the foot
-    //    leaves the center (0 → ±1 transition) — twice per sin cycle, which
-    //    matches the visual stride cadence.
-    this.prevStepOffset = this.stepOffset;
+    // 8. Update the walk-cycle stepOffset (visual stride). Footstep SFX is
+    //    decoupled from this — see below — because sin spends more time near
+    //    its extremes than near zero, which would make audio sound uneven.
     const walking = this.onGround && this.vel.x !== 0;
     const phase = walking ? Math.sin(this.elapsedTime * WALK_CYCLE_FREQ) : 0;
     this.stepOffset = Math.round(phase);
-    if (walking && this.stepOffset !== 0 && this.prevStepOffset === 0) {
-      this.didFootstepThisFrame = true;
+
+    // 9. Footstep cadence — distance-based, regular rhythm. Reset the
+    //    accumulator when not walking so the next walk starts fresh.
+    if (walking) {
+      this.footstepAccumulator += Math.abs(this.vel.x) * dt;
+      if (this.footstepAccumulator >= FOOTSTEP_DISTANCE) {
+        this.footstepAccumulator -= FOOTSTEP_DISTANCE;
+        this.didFootstepThisFrame = true;
+      }
+    } else {
+      this.footstepAccumulator = 0;
     }
 
     this.syncSprite();

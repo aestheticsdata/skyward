@@ -62,9 +62,15 @@ export class ParallaxBackground {
   update(camera: Camera): void {
     // Float positions — the Application's roundPixels rounds once at render
     // time. See camera.ts / player.ts for the same reasoning.
+    //
+    // Vertical scroll factor is fixed at 1 (the parallax tracks camera.pos.y
+    // 1:1) so the painted horizon line stays glued to the world's grass row
+    // even when the camera follows the player above the level's top edge.
+    // Without this, jumping from a high platform would expose a band of sky
+    // between the parallax mountains and the grass surface.
     for (const layer of this.layers) {
       layer.graphics.x = -camera.pos.x * layer.scrollFactor;
-      layer.graphics.y = -camera.pos.y * layer.scrollFactor;
+      layer.graphics.y = -camera.pos.y;
     }
   }
 

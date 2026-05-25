@@ -61,13 +61,6 @@ export const WALK_SPEED = 96; // horizontal max speed
 export const COYOTE_TIME = 0.08; // grace period to still jump after walking off a ledge
 export const JUMP_BUFFER = 0.1; // grace period for jump press just before landing
 
-// Visual / animation feel. These only affect rendering, never physics.
-export const LANDING_SQUASH_DURATION = 0.12; // seconds the squash takes to recover
-export const LANDING_SQUASH_AMOUNT = 0.3; // scale.y dips to (1 - this) on impact
-export const AIR_STRETCH_AMOUNT = 0.15; // max ± scale.y deviation while airborne
-export const WALK_BOB_FREQUENCY = 10; // rad/s — visual step rate
-export const WALK_BOB_AMPLITUDE = 0.04; // scale.y oscillation while walking
-
 // Camera smoothing: higher = snappier follow. Time-based so it's framerate-independent.
 // f = 1 - exp(-RATE * dt). At 60fps with RATE=10, f ≈ 0.155 per frame.
 export const CAMERA_SMOOTHING_RATE = 10;

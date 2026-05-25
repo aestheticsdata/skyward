@@ -27,7 +27,9 @@ export class ParallaxBackground {
     // Using the level width is generous and works for scroll_factor <= 1.
     const width = levelWidthPx;
 
-    // Far: lighter color (closer to sky), slower scroll, lower peaks.
+    // Far: hazy blue-gray, slower scroll, lower peaks. The tone is close to
+    // the cornflower sky on purpose — atmospheric perspective makes distant
+    // mountains nearly merge with the sky.
     this.addLayer(
       makeHillSilhouette({
         width,
@@ -36,12 +38,13 @@ export class ParallaxBackground {
         pointSpacing: 32,
         frequency: 0.5,
         seed: 1.3,
-        color: DB32.opal,
+        color: DB32.heather,
       }),
       0.3,
     );
 
-    // Near: darker, faster scroll, taller and more jagged.
+    // Near: dark green-gray, faster scroll, taller and more jagged. The
+    // contrast vs the far layer is what reads as "depth."
     this.addLayer(
       makeHillSilhouette({
         width,
@@ -50,7 +53,7 @@ export class ParallaxBackground {
         pointSpacing: 16,
         frequency: 0.8,
         seed: 2.7,
-        color: DB32.valhalla,
+        color: DB32.opal,
       }),
       0.6,
     );

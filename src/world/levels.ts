@@ -18,11 +18,15 @@ import type { Graphics } from 'pixi.js';
 //
 // Legend (see CHAR_TO_TILE in tilemap.ts):
 //   . sky / empty   G grass   D dirt   S stone   K dark stone
+// The right row-3 platform is shifted to cols 27-29 (was 24-26) so it no
+// longer sits directly above the row-6 platform at cols 22-24. Body height
+// (16px) ≈ vertical clearance there, which made jumping bonk the ceiling
+// instantly. New layout leaves col 22-24 open above for a clean jump.
 const TEST_LEVEL_ROWS = [
   '........................................',
   '........................................',
   '........................................',
-  '.............GGG........GGG.............',
+  '.............GGG...........GGG..........',
   '........................................',
   '........................................',
   '.....GGG..............GGG...............',

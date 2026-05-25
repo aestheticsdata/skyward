@@ -85,13 +85,38 @@ export class Landmark {
 
   // The visual is drawn with its origin at the BASE (where it sits on a tile),
   // so the entire shape extends upward into negative y.
+  //
+  // Ink/sketchbook treatment: each piece is a paper-toned fill bordered by a
+  // 1-pixel ink outline assembled from thin rects (no `.stroke()` — strokes
+  // are half-pixel-centered by default and would sub-pixel anti-alias). Once
+  // discovered, ink darkens and fills desaturate — the marker looks "logged".
   private makeBody(): Graphics {
     const g = new Graphics();
-    const columnColor = this.discovered ? DB32.dimGray : DB32.heather;
-    const capColor = this.discovered ? DB32.dimGray : DB32.lightSteel;
-    g.rect(-3, -2, 6, 2).fill(DB32.oiledCedar);
-    g.rect(-2, -14, 4, 12).fill(columnColor);
-    g.rect(-3, -16, 6, 2).fill(capColor);
+    const ink = this.discovered ? DB32.opal : DB32.valhalla;
+    const columnFill = this.discovered ? DB32.dimGray : DB32.pancho;
+    const baseFill = this.discovered ? DB32.opal : DB32.oiledCedar;
+
+    // Base (a wider flat block where the column sits on the ground).
+    g.rect(-3, -2, 6, 2).fill(baseFill);
+    g.rect(-3, -2, 6, 1).fill(ink); // top edge of base
+
+    // Column body.
+    g.rect(-2, -14, 4, 12).fill(columnFill);
+    g.rect(-2, -14, 4, 1).fill(ink); // top edge of column
+    g.rect(-2, -3, 4, 1).fill(ink); // bottom edge (over base top)
+    g.rect(-2, -14, 1, 12).fill(ink); // left
+    g.rect(1, -14, 1, 12).fill(ink); // right
+
+    // Cap (slightly wider than the column).
+    g.rect(-3, -16, 6, 2).fill(columnFill);
+    g.rect(-3, -16, 6, 1).fill(ink); // top edge of cap
+    g.rect(-3, -16, 1, 2).fill(ink); // left
+    g.rect(2, -16, 1, 2).fill(ink); // right
+
+    // Faint horizontal carved marks on the column.
+    g.rect(-1, -11, 2, 1).fill(ink);
+    g.rect(-1, -7, 2, 1).fill(ink);
+
     return g;
   }
 

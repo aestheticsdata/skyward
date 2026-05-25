@@ -26,6 +26,14 @@ export class Player implements Body {
   onGround = false;
   readonly sprite: Graphics;
 
+  // One-shot event flags. Set true for a single frame when the corresponding
+  // event happens; the game loop reads them after update() to trigger SFX
+  // (or anything else that should pop on the transition). Cleared at the
+  // start of every update().
+  didJumpThisFrame = false;
+  didLandThisFrame = false;
+  didFootstepThisFrame = false;
+
   // Jump-feel timers (count DOWN; > 0 means active).
   private coyoteTimer = 0;
   private jumpBufferTimer = 0;
@@ -33,6 +41,10 @@ export class Player implements Body {
   // Animation state.
   private facing: 1 | -1 = 1;
   private elapsedTime = 0;
+  // Current/previous quantized step offset, used both by the draw code and
+  // by footstep detection. -1 / 0 / +1.
+  private stepOffset = 0;
+  private prevStepOffset = 0;
 
   constructor(x: number, y: number) {
     this.pos = { x, y };
@@ -42,6 +54,13 @@ export class Player implements Body {
 
   update(input: Input, dt: number, tilemap: Tilemap): void {
     this.elapsedTime += dt;
+    const wasGrounded = this.onGround;
+
+    // Clear last-frame event flags. They'll be set again below if the
+    // matching event fires this frame.
+    this.didJumpThisFrame = false;
+    this.didLandThisFrame = false;
+    this.didFootstepThisFrame = false;
 
     // 1. Coyote timer: refreshed while on ground, counts down once airborne.
     if (this.onGround) {
@@ -69,6 +88,7 @@ export class Player implements Body {
       this.vel.y = -JUMP_VELOCITY;
       this.coyoteTimer = 0;
       this.jumpBufferTimer = 0;
+      this.didJumpThisFrame = true;
     }
 
     // 5. Variable jump height.
@@ -78,6 +98,22 @@ export class Player implements Body {
 
     // 6. Gravity + position + tilemap collision.
     stepPhysics(this, tilemap, dt);
+
+    // 7. Landing detection — went from airborne to grounded this frame.
+    if (!wasGrounded && this.onGround) {
+      this.didLandThisFrame = true;
+    }
+
+    // 8. Update the walk-cycle stepOffset. A footstep "fires" when the foot
+    //    leaves the center (0 → ±1 transition) — twice per sin cycle, which
+    //    matches the visual stride cadence.
+    this.prevStepOffset = this.stepOffset;
+    const walking = this.onGround && this.vel.x !== 0;
+    const phase = walking ? Math.sin(this.elapsedTime * WALK_CYCLE_FREQ) : 0;
+    this.stepOffset = Math.round(phase);
+    if (walking && this.stepOffset !== 0 && this.prevStepOffset === 0) {
+      this.didFootstepThisFrame = true;
+    }
 
     this.syncSprite();
   }
@@ -106,15 +142,15 @@ export class Player implements Body {
     const boots = DB32.heather; // gray-white boots, harmonize with the cloak
     const strap = DB32.dimGray; // satchel strap / arm (darker, reads against the pale cloak)
 
-    // Animation state.
-    //   phase ∈ [-1, +1]      — sine wave that drives the walk
-    //   stepOffset ∈ {-1, 0, +1} — quantized step swing
-    //   bodyBob ∈ {0, -1}      — 1-pixel vertical bounce at mid-stride
+    // Animation state. `stepOffset` is computed in update() so both the draw
+    // code and the footstep-event detection see the same value; here we just
+    // recompute `bodyBob` from the same sine phase.
+    //   stepOffset ∈ {-1, 0, +1} — quantized step swing (from update())
+    //   bodyBob ∈ {0, -1}         — 1-pixel vertical bounce at mid-stride
     const airborne = !this.onGround;
     const walking = this.onGround && this.vel.x !== 0;
-    const phase = walking ? Math.sin(this.elapsedTime * WALK_CYCLE_FREQ) : 0;
-    const stepOffset = Math.round(phase);
-    const bodyBob = walking ? -Math.round(Math.abs(phase)) : 0;
+    const stepOffset = this.stepOffset;
+    const bodyBob = walking ? -Math.abs(stepOffset) : 0;
 
     // Feet — two 2×2 boots with a 2-pixel gap between them at rest.
     //   walking : left foot swings +stepOffset, right foot swings -stepOffset

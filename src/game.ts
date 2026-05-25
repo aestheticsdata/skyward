@@ -1,6 +1,7 @@
 import { SCREEN_WIDTH, TILE_SIZE } from '@constants';
 import { Landmark } from '@entities/landmark';
 import { Player } from '@entities/player';
+import { Audio } from '@systems/audio';
 import { Camera } from '@systems/camera';
 import { Input, KEYS_INTERACT } from '@systems/input';
 import { Sketchbook } from '@systems/sketchbook';
@@ -12,6 +13,7 @@ import { type Application, Container } from 'pixi.js';
 export class Game {
   private readonly app: Application;
   private readonly input: Input;
+  private readonly audio: Audio;
   private readonly tilemap: Tilemap;
   private readonly player: Player;
   private readonly camera: Camera;
@@ -29,6 +31,7 @@ export class Game {
   constructor(app: Application) {
     this.app = app;
     this.input = new Input();
+    this.audio = new Audio();
 
     this.tilemap = loadTestLevel();
 
@@ -73,10 +76,16 @@ export class Game {
       if (this.sketchbook.isVisible()) {
         // Sketchbook open: gameplay is paused. Only the close input is handled.
         if (this.input.isAnyPressed(KEYS_INTERACT)) {
+          this.audio.closeBook();
           this.sketchbook.hide();
         }
       } else {
         this.player.update(this.input, dt, this.tilemap);
+
+        // SFX driven by player one-shot event flags (set during update()).
+        if (this.player.didJumpThisFrame) this.audio.jump();
+        if (this.player.didLandThisFrame) this.audio.land();
+        if (this.player.didFootstepThisFrame) this.audio.footstep();
 
         // Landmarks: show/hide proximity prompts, open sketchbook on E.
         for (const landmark of this.landmarks) {
@@ -86,6 +95,7 @@ export class Game {
           if (inRange && this.input.isAnyPressed(KEYS_INTERACT)) {
             landmark.markDiscovered();
             this.interactionTutorialDone = true;
+            this.audio.discover();
             this.sketchbook.show(landmark.spec);
             break; // one interaction per frame
           }

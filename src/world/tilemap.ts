@@ -217,6 +217,19 @@ export function renderRockBackground(width: number, startY: number, endY: number
   // keeping the layers distinct.
   g.rect(0, startY, width, endY - startY).fill(DB32.verdigris);
 
+  // Geological striations — every ~12 rows, a 1-pixel darker band that
+  // wavers slightly along its length (sin-modulated) so it reads as a
+  // sedimentary layer instead of a ruler-straight stripe. Without these
+  // the rock face was a flat field of speckle; with them it gains depth
+  // and the Amiga-style "this is a cave wall, not paint" feel.
+  for (let bandY = startY + 6; bandY < endY; bandY += 12) {
+    const phase = bandY * 0.13;
+    for (let x = 0; x < width; x++) {
+      const wobble = Math.round(Math.sin(x * 0.04 + phase) * 1.5);
+      g.rect(x, bandY + wobble, 1, 1).fill(DB32.opal);
+    }
+  }
+
   // Speckle pattern. Two density bands give a couple of shades, which reads
   // as mineral grain rather than dust. Pure rect() — pixel-perfect, no
   // strokes or anti-aliasing.
@@ -295,7 +308,7 @@ function drawTile(g: Graphics, t: Tile, x: number, y: number, tx: number, ty: nu
       drawStone(g, x, y, tx, ty);
       break;
     case Tile.DarkStone:
-      drawDarkStone(g, x, y, tx, ty);
+      drawDarkStone(g, x, y, ty);
       break;
   }
 }
@@ -304,12 +317,42 @@ function drawGrass(g: Graphics, x: number, y: number, tx: number, ty: number): v
   // Bright top line — the horizon-marker that reads as "this is the surface."
   g.rect(x, y, TILE_SIZE, 1).fill(DB32.atlantis);
 
+  // Darker grass body bottom — 3-row band that transitions to dirt below,
+  // so the grass tile reads as having depth (turf rooted into soil) instead
+  // of being a flat green slab. Classic Amiga touch.
+  g.rect(x, y + TILE_SIZE - 3, TILE_SIZE, 3).fill(DB32.dell);
+  // 1-px dither row at the band edge — softens the cut from mid-green to
+  // dark-green so it doesn't look like a hard horizontal stripe.
+  for (let i = 0; i < TILE_SIZE; i += 2) {
+    g.rect(x + i, y + TILE_SIZE - 4, 1, 1).fill(DB32.dell);
+  }
+
+  // Speckled tone variation in the grass body — a few darker green pixels
+  // scattered through the middle band so the surface looks like blades, not
+  // a painted block.
+  for (let i = 0; i < 5; i++) {
+    const sx = Math.floor(tileHash(tx, ty, 60 + i) * TILE_SIZE);
+    const sy = 2 + Math.floor(tileHash(tx, ty, 70 + i) * 8);
+    g.rect(x + sx, y + sy, 1, 1).fill(DB32.dell);
+  }
+  // Two lighter blade specks above the band — catches the highlight.
+  for (let i = 0; i < 2; i++) {
+    const sx = Math.floor(tileHash(tx, ty, 80 + i) * TILE_SIZE);
+    const sy = 1 + Math.floor(tileHash(tx, ty, 90 + i) * 6);
+    g.rect(x + sx, y + sy, 1, 1).fill(DB32.atlantis);
+  }
+
   // A few short tufts standing up off the top edge. Position and count are
-  // stable per tile (no jitter across frames).
-  const tuftCount = tileHash(tx, ty, 1) < 0.5 ? 2 : 3;
+  // stable per tile (no jitter across frames). Denser than before for a
+  // tufted-meadow feel.
+  const tuftCount = tileHash(tx, ty, 1) < 0.4 ? 3 : 4;
   for (let i = 0; i < tuftCount; i++) {
     const tx0 = Math.floor(tileHash(tx, ty, 10 + i) * (TILE_SIZE - 2)) + 1;
     g.rect(x + tx0, y - 1, 1, 1).fill(DB32.atlantis);
+    // Occasional 2-px tall tuft for variety.
+    if (tileHash(tx, ty, 20 + i) < 0.3) {
+      g.rect(x + tx0, y - 2, 1, 1).fill(DB32.atlantis);
+    }
   }
 
   // Sparse wildflowers — roughly 1 grass tile in 5 grows one. A 2-pixel green
@@ -326,27 +369,126 @@ function drawGrass(g: Graphics, x: number, y: number, tx: number, ty: number): v
 }
 
 function drawDirt(g: Graphics, x: number, y: number, tx: number, ty: number): void {
-  // A handful of darker speckles scattered across the tile.
-  for (let i = 0; i < 4; i++) {
+  // Horizontal striation — one slightly darker row, position varies per tile
+  // column so the lines don't form a continuous stripe across the level.
+  // Reads as compressed-earth strata rather than a flat brown surface.
+  const striationY = 2 + Math.floor(tileHash(tx, ty, 70) * 10);
+  g.rect(x, y + striationY, TILE_SIZE, 1).fill(DB32.loulou);
+
+  // Speckles — denser than before, mix of darker and lighter so the surface
+  // feels grainy.
+  for (let i = 0; i < 7; i++) {
     const sx = Math.floor(tileHash(tx, ty, 20 + i) * (TILE_SIZE - 2)) + 1;
     const sy = Math.floor(tileHash(tx, ty, 30 + i) * (TILE_SIZE - 2)) + 1;
     g.rect(x + sx, y + sy, 1, 1).fill(DB32.loulou);
   }
-}
-
-function drawStone(g: Graphics, x: number, y: number, _tx: number, _ty: number): void {
-  // Top highlight + bottom shadow — gives volume without needing a real outline.
-  g.rect(x, y, TILE_SIZE, 1).fill(DB32.lightSteel);
-  g.rect(x, y + TILE_SIZE - 1, TILE_SIZE, 1).fill(DB32.dimGray);
-}
-
-function drawDarkStone(g: Graphics, x: number, y: number, tx: number, ty: number): void {
-  // Subtle speckle — dark stone reads as deep background, not a focus area.
-  for (let i = 0; i < 2; i++) {
-    const sx = Math.floor(tileHash(tx, ty, 50 + i) * (TILE_SIZE - 2)) + 1;
-    const sy = Math.floor(tileHash(tx, ty, 60 + i) * (TILE_SIZE - 2)) + 1;
-    g.rect(x + sx, y + sy, 1, 1).fill(DB32.opal);
+  for (let i = 0; i < 3; i++) {
+    const sx = Math.floor(tileHash(tx, ty, 40 + i) * (TILE_SIZE - 2)) + 1;
+    const sy = Math.floor(tileHash(tx, ty, 50 + i) * (TILE_SIZE - 2)) + 1;
+    g.rect(x + sx, y + sy, 1, 1).fill(DB32.rope);
   }
+
+  // Embedded pebble — about one tile in three has a small gray rock poking
+  // through the soil. Adds the "rough mineral earth" feel of Amiga dirt
+  // textures instead of flat brown. Capped to topaz so it doesn't read as
+  // a glowing white dot on dark soil — a softer "exposed stone" tone.
+  if (tileHash(tx, ty, 80) < 0.35) {
+    const px = 2 + Math.floor(tileHash(tx, ty, 81) * (TILE_SIZE - 6));
+    const py = 4 + Math.floor(tileHash(tx, ty, 82) * (TILE_SIZE - 8));
+    g.rect(x + px, y + py, 2, 2).fill(DB32.topaz);
+    g.rect(x + px, y + py, 2, 1).fill(DB32.heather);
+  }
+}
+
+// One brick of the running-bond pattern at global pixel coords (gx, gy),
+// 8x8, clipped to the tile rect (tileX, tileY, 16, 16). Bevel reads as
+// "lit from above" — a single-pixel top highlight, dark mortar on right
+// and bottom. Left edge is intentionally NOT highlighted: the side
+// highlight made each brick face read as a pale tile (Minecraft) rather
+// than rough masonry (Rome AGA / Gods). The 1-px top highlight alone is
+// enough to suggest sun on the upper edge without bleaching the face.
+//
+// Every brick of a given rock type uses the SAME face color — Amiga
+// stone tilesets are uniform within a material. No per-brick accent.
+//
+// Only the brick edges that actually fall inside the tile are drawn — so
+// bricks crossing a tile boundary look correct on both sides.
+function drawBrick(
+  g: Graphics,
+  gx: number,
+  gy: number,
+  tileX: number,
+  tileY: number,
+  base: number,
+  hi: number,
+  lo: number,
+): void {
+  const x0 = Math.max(gx, tileX);
+  const x1 = Math.min(gx + 8, tileX + TILE_SIZE);
+  const y0 = Math.max(gy, tileY);
+  const y1 = Math.min(gy + 8, tileY + TILE_SIZE);
+  if (x0 >= x1 || y0 >= y1) return;
+
+  g.rect(x0, y0, x1 - x0, y1 - y0).fill(base);
+
+  // Top highlight — single pixel along the brick's top edge.
+  if (gy >= tileY) {
+    g.rect(x0, gy, x1 - x0, 1).fill(hi);
+  }
+  // Right and bottom mortar lines. Drawn after the top highlight so the
+  // top-right corner ends up dark (the bevel signature).
+  if (gx + 7 < tileX + TILE_SIZE) {
+    g.rect(gx + 7, y0, 1, y1 - y0).fill(lo);
+  }
+  if (gy + 7 < tileY + TILE_SIZE) {
+    g.rect(x0, gy + 7, x1 - x0, 1).fill(lo);
+  }
+}
+
+// Lay out the brick pattern for a single 16x16 tile. Two brick rows per
+// tile (each 8 px tall). Even brick rows are aligned (bricks at x=0,8);
+// odd rows shift by +4 px (running-bond stagger). Brick row index is
+// global (ty * 2 + halfRow), so the stagger reads continuously across
+// vertically adjacent tiles.
+function drawBrickPattern(
+  g: Graphics,
+  x: number,
+  y: number,
+  ty: number,
+  base: number,
+  hi: number,
+  lo: number,
+): void {
+  for (let halfRow = 0; halfRow < 2; halfRow++) {
+    const brickY = y + halfRow * 8;
+    const brickRowIndex = ty * 2 + halfRow;
+    const offset = (brickRowIndex & 1) === 0 ? 0 : 4;
+    // First brick whose right edge is past the tile's left edge.
+    const firstBrickX = Math.floor((x - offset) / 8) * 8 + offset;
+    for (let brickX = firstBrickX; brickX < x + TILE_SIZE; brickX += 8) {
+      drawBrick(g, brickX, brickY, x, y, base, hi, lo);
+    }
+  }
+}
+
+function drawStone(g: Graphics, x: number, y: number, tx: number, ty: number): void {
+  drawBrickPattern(g, x, y, ty, TILE_COLORS[Tile.Stone], DB32.lightSteel, DB32.dimGray);
+
+  // Sparse crack — about one brick in twelve gets a single-pixel chip on
+  // its face, giving the wall character without becoming busy. Same
+  // shadow tone as the mortar so it stays inside the material's palette.
+  if (tileHash(tx, ty, 110) < 0.18) {
+    const cx = 2 + Math.floor(tileHash(tx, ty, 111) * (TILE_SIZE - 4));
+    const cy = 2 + Math.floor(tileHash(tx, ty, 112) * (TILE_SIZE - 4));
+    g.rect(x + cx, y + cy, 1, 1).fill(DB32.dimGray);
+  }
+}
+
+function drawDarkStone(g: Graphics, x: number, y: number, ty: number): void {
+  // Same brick pattern as Stone but a darker, more underground palette:
+  // topaz base, heather highlight (lighter than base), valhalla shadow
+  // (almost black). Reads as the same mason work, deeper in the earth.
+  drawBrickPattern(g, x, y, ty, TILE_COLORS[Tile.DarkStone], DB32.heather, DB32.valhalla);
 }
 
 // Where the water surface sits inside the tile, at rest.

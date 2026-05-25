@@ -263,9 +263,12 @@ export class Player implements Body {
   //
   // Visual brief: a small hooded cartographer in a pale near-white cloak,
   // with two gray-white boots and a darker satchel strap doubling as the
-  // visible arm. Three poses: idle, walk (foot/arm swing + body-bob), jump
-  // (feet together, diagonal arm). Water cast is applied uniformly via
-  // sprite.tint in syncSprite — drawFigure draws with original colors.
+  // visible arm. The 1-pixel hard outline along the cloak and hood sides
+  // is what reads as "Amiga sprite" rather than "Minecraft block" — the
+  // colors themselves stay pale-gray. Three poses: idle, walk (foot/arm
+  // swing + body-bob), jump (feet together, diagonal arm). Water cast is
+  // applied uniformly via sprite.tint in syncSprite — drawFigure draws
+  // with original colors.
   private drawFigure(): void {
     const g = this.sprite;
     g.clear();
@@ -273,6 +276,7 @@ export class Player implements Body {
     const cloak = DB32.lightSteel;
     const cloakHi = DB32.white;
     const cloakLo = DB32.heather;
+    const outline = DB32.valhalla;  // 1-px hard silhouette outline
     const inside = DB32.valhalla;
     const eye = DB32.twine;
     const boots = DB32.heather;
@@ -295,14 +299,26 @@ export class Player implements Body {
       g.rect(1 - stepOffset, -2, 2, 2).fill(boots);
     }
 
-    // Cloak — main body. 10 wide × 8 tall.
+    // Cloak — main body. 10 wide × 8 tall. Layering:
+    //   1. Fill base color.
+    //   2. Top highlight (between the outline columns).
+    //   3. Bottom shadow row.
+    //   4. Side outlines — drawn LAST so they win at every corner.
+    //      THIS is what carries the Amiga look: a crisp 1-px dark edge
+    //      against any background. Without it the pale cloak read as a
+    //      modern flat block.
     g.rect(-5, -10 + bodyBob, 10, 8).fill(cloak);
-    g.rect(-5, -10 + bodyBob, 10, 1).fill(cloakHi);
-    g.rect(-5, -3 + bodyBob, 10, 1).fill(cloakLo);
+    g.rect(-4, -10 + bodyBob, 8, 1).fill(cloakHi);
+    g.rect(-4, -3 + bodyBob, 8, 1).fill(cloakLo);
+    g.rect(-5, -10 + bodyBob, 1, 8).fill(outline);
+    g.rect(4, -10 + bodyBob, 1, 8).fill(outline);
 
-    // Hood — 8 wide × 6 tall, sits flush on top of the cloak.
+    // Hood — 8 wide × 6 tall, sits flush on top of the cloak. Same
+    // outline-last layering as the cloak so the silhouette stays crisp.
     g.rect(-4, -16 + bodyBob, 8, 6).fill(cloak);
-    g.rect(-4, -16 + bodyBob, 8, 1).fill(cloakHi);
+    g.rect(-3, -16 + bodyBob, 6, 1).fill(cloakHi);
+    g.rect(-4, -16 + bodyBob, 1, 6).fill(outline);
+    g.rect(3, -16 + bodyBob, 1, 6).fill(outline);
 
     // Inside the hood: deep shadow + a single warm pixel for the eye.
     g.rect(-3, -15 + bodyBob, 6, 4).fill(inside);

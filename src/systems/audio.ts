@@ -149,4 +149,77 @@ export class Audio {
   closeBook(): void {
     this.blip({ freq: 330, freqEnd: 220, duration: 0.1, volume: 0.15, type: 'triangle' });
   }
+
+  // "Floc" — short low blip with a noise tail. Played when the player wades
+  // into a water tile. Two layers: a low triangle thump for the splash body,
+  // a brief noise burst for the spray.
+  splash(): void {
+    this.blip({ freq: 200, freqEnd: 80, duration: 0.12, volume: 0.2, type: 'triangle' });
+    this.noise({ duration: 0.06, volume: 0.08, delay: 0.02 });
+  }
+
+  // Per-step splash while wading. Two layered noise sources, both filtered
+  // and pitch-modulated, to imitate a real wet splash:
+  //   - "Body" layer: band-pass that sweeps DOWN (1200 → 350 Hz), mimicking
+  //     a real splash's mid-frequency content collapsing as the water
+  //     swallows whatever entered it. Random playback-rate per call so two
+  //     consecutive steps aren't identical.
+  //   - "Spray" layer: a brief, brighter burst (high-pass 2500 Hz) for the
+  //     droplet-flicking-back tail at the start of the splash.
+  // Together these read as "floc" — broadband noise with character — rather
+  // than a single muffled hiss.
+  wadeStep(): void {
+    const ctx = this.ensureContext();
+    if (!this.noiseBuffer) {
+      const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      this.noiseBuffer = buf;
+    }
+
+    const start = ctx.currentTime;
+    const master = this.masterNode;
+    const noise = this.noiseBuffer;
+
+    // ---- Layer 1: body of the splash --------------------------------------
+    const bodyEnd = start + 0.16;
+    const body = ctx.createBufferSource();
+    body.buffer = noise;
+    // Per-step pitch jitter — breaks the "same sample again and again" feel.
+    body.playbackRate.value = 0.7 + Math.random() * 0.4;
+
+    const bodyFilter = ctx.createBiquadFilter();
+    bodyFilter.type = 'bandpass';
+    bodyFilter.frequency.setValueAtTime(1200, start);
+    bodyFilter.frequency.exponentialRampToValueAtTime(350, bodyEnd);
+    bodyFilter.Q.setValueAtTime(0.9, start);
+
+    const bodyGain = ctx.createGain();
+    bodyGain.gain.setValueAtTime(0, start);
+    bodyGain.gain.linearRampToValueAtTime(0.18, start + 0.02);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, bodyEnd);
+
+    body.connect(bodyFilter).connect(bodyGain).connect(master);
+    body.start(start);
+    body.stop(bodyEnd);
+
+    // ---- Layer 2: bright spray tick ---------------------------------------
+    const sprayEnd = start + 0.05;
+    const spray = ctx.createBufferSource();
+    spray.buffer = noise;
+    spray.playbackRate.value = 1.1 + Math.random() * 0.3;
+
+    const sprayFilter = ctx.createBiquadFilter();
+    sprayFilter.type = 'highpass';
+    sprayFilter.frequency.setValueAtTime(2500, start);
+
+    const sprayGain = ctx.createGain();
+    sprayGain.gain.setValueAtTime(0, start);
+    sprayGain.gain.linearRampToValueAtTime(0.07, start + 0.005);
+    sprayGain.gain.exponentialRampToValueAtTime(0.0001, sprayEnd);
+
+    spray.connect(sprayFilter).connect(sprayGain).connect(master);
+    spray.start(start);
+    spray.stop(sprayEnd);
+  }
 }

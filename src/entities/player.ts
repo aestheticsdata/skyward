@@ -1,8 +1,8 @@
-import { COYOTE_TIME, DB32, JUMP_BUFFER, JUMP_RELEASE_MULT, JUMP_VELOCITY, WALK_SPEED } from '@constants';
+import { COYOTE_TIME, DB32, JUMP_BUFFER, JUMP_RELEASE_MULT, JUMP_VELOCITY, TILE_SIZE, WALK_SPEED } from '@constants';
 import { type Input, KEYS_JUMP, KEYS_LEFT, KEYS_RIGHT } from '@systems/input';
 import { type Body, stepPhysics } from '@systems/physics';
 import type { Vec2 } from '@types';
-import type { Tilemap } from '@world/tilemap';
+import { Tile, type Tilemap } from '@world/tilemap';
 import { Graphics } from 'pixi.js';
 
 // Walk-cycle angular frequency (rad/s). One sin period spans both feet — at
@@ -39,6 +39,11 @@ export class Player implements Body {
   didJumpThisFrame = false;
   didLandThisFrame = false;
   didFootstepThisFrame = false;
+  didEnterWaterThisFrame = false;
+  // Whether the body's mid-point is currently inside a Water tile. Public so
+  // the game loop can use it to pause water-surface animation while the
+  // player isn't in the lake.
+  inWater = false;
 
   // Jump-feel timers (count DOWN; > 0 means active).
   private coyoteTimer = 0;
@@ -68,6 +73,7 @@ export class Player implements Body {
     this.didJumpThisFrame = false;
     this.didLandThisFrame = false;
     this.didFootstepThisFrame = false;
+    this.didEnterWaterThisFrame = false;
 
     // 1. Coyote timer: refreshed while on ground, counts down once airborne.
     if (this.onGround) {
@@ -129,6 +135,15 @@ export class Player implements Body {
     } else {
       this.footstepAccumulator = 0;
     }
+
+    // 10. Water-entry detection. Samples the tile at the body's mid-point —
+    //     using the middle (not the feet) avoids false positives when feet
+    //     are on the solid stone tile underneath a water tile.
+    const tx = Math.floor((this.pos.x + this.size.x / 2) / TILE_SIZE);
+    const ty = Math.floor((this.pos.y + this.size.y / 2) / TILE_SIZE);
+    const nowInWater = tilemap.at(tx, ty) === Tile.Water;
+    if (nowInWater && !this.inWater) this.didEnterWaterThisFrame = true;
+    this.inWater = nowInWater;
 
     this.syncSprite();
   }
@@ -192,9 +207,11 @@ export class Player implements Body {
 
     // Inside the hood: deep shadow + a single warm pixel for the eye. The eye
     // sits on the +x side so scale.x = -1 mirroring puts it on whichever side
-    // the character faces.
+    // the character faces. While airborne the eye shifts up 2 px so he reads
+    // as "looking up" through the jump.
     g.rect(-3, -15 + bodyBob, 6, 4).fill(inside);
-    g.rect(1, -13 + bodyBob, 1, 1).fill(eye);
+    const eyeY = -13 + bodyBob + (airborne ? -2 : 0);
+    g.rect(1, eyeY, 1, 1).fill(eye);
 
     // Arm — drawn as a 4-pixel diagonal "strap" across the cloak.
     //   walking : shifts horizontally opposite to the step (arm/leg in

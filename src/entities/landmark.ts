@@ -16,6 +16,10 @@ export interface LandmarkSpec {
   y: number;
   name: string;
   description: string;
+  // Populate the given Graphics with the in-world body. Drawn around the
+  // origin (0, 0): feet at the origin, body extending into negative y.
+  // `discovered` flips the palette to the muted "logged" state.
+  drawBody(g: Graphics, discovered: boolean): void;
   // Populate the given Graphics with the sketchbook illustration. Drawn
   // around the origin (0, 0); the sketchbook positions the result inside
   // the frame.
@@ -77,46 +81,22 @@ export class Landmark {
     if (this.discovered) return;
     this.discovered = true;
     this.setPromptMode(null);
-    this.sprite.removeChild(this.body);
-    this.body.destroy();
-    this.body = this.makeBody();
-    this.sprite.addChildAt(this.body, 0);
+    // Note: we intentionally do NOT re-render the body in a "logged" palette.
+    // Discovered landmarks keep their original look so the world doesn't
+    // lose color over time; the only state change is the prompt going away.
   }
 
-  // The visual is drawn with its origin at the BASE (where it sits on a tile),
-  // so the entire shape extends upward into negative y.
+  // The visual is drawn with its origin at the BASE (where it sits on a tile).
+  // Per-landmark geometry comes from `spec.drawBody()` — different landmarks
+  // have very different shapes (column, cairn, arch, tree, crystal). This
+  // class just owns the lifecycle.
   //
-  // Ink/sketchbook treatment: each piece is a paper-toned fill bordered by a
-  // 1-pixel ink outline assembled from thin rects (no `.stroke()` — strokes
-  // are half-pixel-centered by default and would sub-pixel anti-alias). Once
-  // discovered, ink darkens and fills desaturate — the marker looks "logged".
+  // We always pass `false` as the discovered flag here: per the design above,
+  // the in-world appearance never changes after discovery. The flag is kept
+  // on the `LandmarkSpec` interface in case a future design wants it.
   private makeBody(): Graphics {
     const g = new Graphics();
-    const ink = this.discovered ? DB32.opal : DB32.valhalla;
-    const columnFill = this.discovered ? DB32.dimGray : DB32.pancho;
-    const baseFill = this.discovered ? DB32.opal : DB32.oiledCedar;
-
-    // Base (a wider flat block where the column sits on the ground).
-    g.rect(-3, -2, 6, 2).fill(baseFill);
-    g.rect(-3, -2, 6, 1).fill(ink); // top edge of base
-
-    // Column body.
-    g.rect(-2, -14, 4, 12).fill(columnFill);
-    g.rect(-2, -14, 4, 1).fill(ink); // top edge of column
-    g.rect(-2, -3, 4, 1).fill(ink); // bottom edge (over base top)
-    g.rect(-2, -14, 1, 12).fill(ink); // left
-    g.rect(1, -14, 1, 12).fill(ink); // right
-
-    // Cap (slightly wider than the column).
-    g.rect(-3, -16, 6, 2).fill(columnFill);
-    g.rect(-3, -16, 6, 1).fill(ink); // top edge of cap
-    g.rect(-3, -16, 1, 2).fill(ink); // left
-    g.rect(2, -16, 1, 2).fill(ink); // right
-
-    // Faint horizontal carved marks on the column.
-    g.rect(-1, -11, 2, 1).fill(ink);
-    g.rect(-1, -7, 2, 1).fill(ink);
-
+    this.spec.drawBody(g, false);
     return g;
   }
 

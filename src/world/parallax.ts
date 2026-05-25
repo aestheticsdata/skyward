@@ -103,10 +103,12 @@ function makeHillSilhouette(opts: HillSilhouetteOptions): Graphics {
     points.push(x, opts.horizonY - h * opts.maxHeight);
   }
 
-  // Close the polygon well below the horizon so the fill always extends
-  // beyond the viewport, no matter where the camera is.
-  points.push(opts.width, opts.horizonY + 200);
-  points.push(0, opts.horizonY + 200);
+  // Close the polygon AT the horizon — the silhouette only fills the sky
+  // band above the surface. Below the horizon there's nothing (transparent),
+  // so the underground rock backdrop in the world container shows through
+  // any cave openings instead of these mountain colors bleeding down.
+  points.push(opts.width, opts.horizonY);
+  points.push(0, opts.horizonY);
 
   return new Graphics().poly(points).fill(opts.color);
 }

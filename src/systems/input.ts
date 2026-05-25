@@ -75,3 +75,6 @@ export const KEYS_LEFT = ['ArrowLeft', 'KeyA', 'KeyQ'] as const;
 export const KEYS_RIGHT = ['ArrowRight', 'KeyD'] as const;
 export const KEYS_JUMP = ['Space', 'ArrowUp', 'KeyW', 'KeyZ'] as const;
 export const KEYS_INTERACT = ['KeyE'] as const;
+// Respawn-at-surface key. Temporary escape hatch for getting out of the
+// underground until proper ascent mechanics (ladders / double-jump) land.
+export const KEYS_RESPAWN = ['KeyR'] as const;

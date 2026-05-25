@@ -1,5 +1,23 @@
-import { COYOTE_TIME, DB32, JUMP_BUFFER, JUMP_RELEASE_MULT, JUMP_VELOCITY, TILE_SIZE, WALK_SPEED } from '@constants';
-import { type Input, KEYS_JUMP, KEYS_LEFT, KEYS_RIGHT } from '@systems/input';
+import {
+  COYOTE_TIME,
+  DB32,
+  JUMP_BUFFER,
+  JUMP_RELEASE_MULT,
+  JUMP_VELOCITY,
+  SUBMERGED_TINT,
+  SWIM_DOWN_SPEED,
+  SWIM_HORIZONTAL_SPEED,
+  SWIM_STROKE_INTERVAL,
+  SWIM_UP_SPEED,
+  TILE_SIZE,
+  WADE_SPEED,
+  WALK_SPEED,
+  WATER_ENTRY_VEL_CAP,
+  WATER_EXIT_BOOST,
+  WATER_GRAVITY,
+  WATER_TERMINAL_VEL,
+} from '@constants';
+import { type Input, KEYS_DOWN, KEYS_JUMP, KEYS_LEFT, KEYS_RIGHT } from '@systems/input';
 import { type Body, stepPhysics } from '@systems/physics';
 import type { Vec2 } from '@types';
 import { Tile, type Tilemap } from '@world/tilemap';
@@ -40,10 +58,21 @@ export class Player implements Body {
   didLandThisFrame = false;
   didFootstepThisFrame = false;
   didEnterWaterThisFrame = false;
+  didSwimStrokeThisFrame = false;
   // Whether the body's mid-point is currently inside a Water tile. Public so
   // the game loop can use it to pause water-surface animation while the
   // player isn't in the lake.
   inWater = false;
+  // True when ANY tile the body AABB overlaps is Water — i.e., even a
+  // single pixel of overlap counts. Drives the blue cast on the whole
+  // figure (sprite tint) so the visual stays consistent from "first toe
+  // wet" through "head submerged" without intermediate states.
+  private bodyTouchesWater = false;
+  // True when the player is in water AND not standing on a solid floor —
+  // i.e., floating / swimming through the water column. Drives the swim
+  // arm animation and the swim-stroke SFX. Setting this also tells the
+  // physics pass to skip its own gravity so the entity controls vel.y.
+  swimming = false;
 
   // Jump-feel timers (count DOWN; > 0 means active).
   private coyoteTimer = 0;
@@ -57,6 +86,9 @@ export class Player implements Body {
   // Distance traveled since the last footstep SFX. Independent of the sin
   // phase so the audio cadence stays regular.
   private footstepAccumulator = 0;
+  // Countdown to the next automatic swim-stroke SFX. Counts DOWN while
+  // moving in water; reset to the interval when not moving.
+  private swimStrokeTimer = 0;
 
   constructor(x: number, y: number) {
     this.pos = { x, y };
@@ -67,6 +99,7 @@ export class Player implements Body {
   update(input: Input, dt: number, tilemap: Tilemap): void {
     this.elapsedTime += dt;
     const wasGrounded = this.onGround;
+    const wasInWater = this.inWater;
 
     // Clear last-frame event flags. They'll be set again below if the
     // matching event fires this frame.
@@ -74,59 +107,144 @@ export class Player implements Body {
     this.didLandThisFrame = false;
     this.didFootstepThisFrame = false;
     this.didEnterWaterThisFrame = false;
+    this.didSwimStrokeThisFrame = false;
 
-    // 1. Coyote timer: refreshed while on ground, counts down once airborne.
-    if (this.onGround) {
-      this.coyoteTimer = COYOTE_TIME;
-    } else {
-      this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
+    // Water detection.
+    //   `inWater`          = body midpoint sits in a Water tile. Drives the
+    //                        SFX / swim-mode physics / water-surface anim.
+    //   `bodyTouchesWater` = ANY tile the AABB overlaps is Water. Drives
+    //                        the binary blue tint on the whole sprite —
+    //                        as soon as the figure dips a toe in, it's
+    //                        fully blue; the moment every pixel has left
+    //                        the water tile, the tint clears. No partial
+    //                        / per-pixel split — keeps the visual rule
+    //                        trivial to predict.
+    const tx = Math.floor((this.pos.x + this.size.x / 2) / TILE_SIZE);
+    const midY = Math.floor((this.pos.y + this.size.y / 2) / TILE_SIZE);
+    const nowInWater = tilemap.at(tx, midY) === Tile.Water;
+    const leftCol = Math.floor(this.pos.x / TILE_SIZE);
+    const rightCol = Math.floor((this.pos.x + this.size.x - 1) / TILE_SIZE);
+    const topRowAABB = Math.floor(this.pos.y / TILE_SIZE);
+    const bottomRowAABB = Math.floor((this.pos.y + this.size.y - 1) / TILE_SIZE);
+    let touches = false;
+    for (let col = leftCol; col <= rightCol && !touches; col++) {
+      for (let row = topRowAABB; row <= bottomRowAABB; row++) {
+        if (tilemap.at(col, row) === Tile.Water) {
+          touches = true;
+          break;
+        }
+      }
     }
-    this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - dt);
-
-    // 2. Buffer jump presses so an early press still triggers a jump on landing.
-    if (input.isAnyPressed(KEYS_JUMP)) {
-      this.jumpBufferTimer = JUMP_BUFFER;
+    this.bodyTouchesWater = touches;
+    if (nowInWater && !wasInWater) {
+      this.didEnterWaterThisFrame = true;
+      // Crush most of the falling momentum the instant we enter water —
+      // otherwise the player carries their full fall velocity straight to
+      // the bottom of a deep lake before drag has a chance to act.
+      if (this.vel.y > WATER_ENTRY_VEL_CAP) this.vel.y = WATER_ENTRY_VEL_CAP;
     }
+    this.inWater = nowInWater;
+    // `swimming` is purely a visual + physics-bypass flag: in water AND
+    // not standing on solid ground. Used by drawFigure to switch to the
+    // swim arm pose and by stepPhysics to skip its own gravity.
+    this.swimming = nowInWater && !this.onGround;
 
-    // 3. Horizontal target velocity + facing direction.
+    // Horizontal direction input — facing follows it whether on land,
+    // wading, or swimming.
     let move = 0;
     if (input.isAnyDown(KEYS_LEFT)) move -= 1;
     if (input.isAnyDown(KEYS_RIGHT)) move += 1;
-    this.vel.x = move * WALK_SPEED;
     if (move > 0) this.facing = 1;
     else if (move < 0) this.facing = -1;
 
-    // 4. Trigger jump if both timers are active.
-    if (this.coyoteTimer > 0 && this.jumpBufferTimer > 0) {
-      this.vel.y = -JUMP_VELOCITY;
+    if (this.inWater) {
+      // === WATER MODE — one rule:
+      //   on ground + no jump → walk at WADE_SPEED, vel.y = 0
+      //   jump held           → swim UP at SWIM_UP_SPEED
+      //   down held + off ground → dive at SWIM_DOWN_SPEED
+      //   otherwise off ground → slow sink (gravity capped at WATER_TERMINAL_VEL)
+      const jumpDown = input.isAnyDown(KEYS_JUMP);
+      const diveDown = input.isAnyDown(KEYS_DOWN);
+      if (jumpDown) {
+        this.vel.y = -SWIM_UP_SPEED;
+      } else if (this.onGround) {
+        this.vel.y = 0;
+      } else if (diveDown) {
+        this.vel.y = SWIM_DOWN_SPEED;
+      } else {
+        this.vel.y += WATER_GRAVITY * dt;
+        if (this.vel.y > WATER_TERMINAL_VEL) this.vel.y = WATER_TERMINAL_VEL;
+      }
+      this.vel.x = move * (this.onGround ? WADE_SPEED : SWIM_HORIZONTAL_SPEED);
+
+      // Swim stroke SFX while actually swimming (off ground) and moving.
+      if (this.swimming && (move !== 0 || jumpDown || diveDown)) {
+        this.swimStrokeTimer -= dt;
+        if (this.swimStrokeTimer <= 0) {
+          this.didSwimStrokeThisFrame = true;
+          this.swimStrokeTimer = SWIM_STROKE_INTERVAL;
+        }
+      } else {
+        this.swimStrokeTimer = SWIM_STROKE_INTERVAL;
+      }
+
+      // Land jump timers don't apply in water.
       this.coyoteTimer = 0;
       this.jumpBufferTimer = 0;
-      this.didJumpThisFrame = true;
+    } else {
+      // === LAND MODE (walk + jump) ===
+      if (this.onGround) {
+        this.coyoteTimer = COYOTE_TIME;
+      } else {
+        this.coyoteTimer = Math.max(0, this.coyoteTimer - dt);
+      }
+      this.jumpBufferTimer = Math.max(0, this.jumpBufferTimer - dt);
+
+      if (input.isAnyPressed(KEYS_JUMP)) {
+        this.jumpBufferTimer = JUMP_BUFFER;
+      }
+
+      this.vel.x = move * WALK_SPEED;
+
+      if (this.coyoteTimer > 0 && this.jumpBufferTimer > 0) {
+        this.vel.y = -JUMP_VELOCITY;
+        this.coyoteTimer = 0;
+        this.jumpBufferTimer = 0;
+        this.didJumpThisFrame = true;
+      }
+
+      if (this.vel.y < 0 && input.isAnyReleased(KEYS_JUMP)) {
+        this.vel.y *= JUMP_RELEASE_MULT;
+      }
     }
 
-    // 5. Variable jump height.
-    if (this.vel.y < 0 && input.isAnyReleased(KEYS_JUMP)) {
-      this.vel.y *= JUMP_RELEASE_MULT;
+    // Exit boost — the frame the midpoint crosses out of water while still
+    // moving up, convert the swim-up momentum into a small jump so the
+    // player can pop onto a one-tile-high bank. Symmetric (works either
+    // direction); needs no extra input.
+    if (wasInWater && !this.inWater && this.vel.y < 0) {
+      this.vel.y = Math.min(this.vel.y, -WATER_EXIT_BOOST);
     }
 
-    // 6. Gravity + position + tilemap collision.
+    // Gravity + position + tile collision. body.swimming = true makes
+    // stepPhysics skip its own gravity — we own vel.y in water mode.
     stepPhysics(this, tilemap, dt);
 
-    // 7. Landing detection — went from airborne to grounded this frame.
+    // Landing detection — went from airborne to grounded this frame.
     if (!wasGrounded && this.onGround) {
       this.didLandThisFrame = true;
     }
 
-    // 8. Update the walk-cycle stepOffset (visual stride). Footstep SFX is
-    //    decoupled from this — see below — because sin spends more time near
-    //    its extremes than near zero, which would make audio sound uneven.
-    const walking = this.onGround && this.vel.x !== 0;
-    const phase = walking ? Math.sin(this.elapsedTime * WALK_CYCLE_FREQ) : 0;
+    // Walk-cycle stepOffset (visual stride). Drives both normal walking
+    // and wading (on ground in water) — same pose, same sine phase.
+    const stepping = this.onGround && this.vel.x !== 0;
+    const phase = stepping ? Math.sin(this.elapsedTime * WALK_CYCLE_FREQ) : 0;
     this.stepOffset = Math.round(phase);
 
-    // 9. Footstep cadence — distance-based, regular rhythm. Reset the
-    //    accumulator when not walking so the next walk starts fresh.
-    if (walking) {
+    // Footstep cadence — distance-based. Fires for both dry walking and
+    // wading; the game loop picks the right SFX (footstep vs wadeStep)
+    // based on `inWater`.
+    if (stepping) {
       this.footstepAccumulator += Math.abs(this.vel.x) * dt;
       if (this.footstepAccumulator >= FOOTSTEP_DISTANCE) {
         this.footstepAccumulator -= FOOTSTEP_DISTANCE;
@@ -135,15 +253,6 @@ export class Player implements Body {
     } else {
       this.footstepAccumulator = 0;
     }
-
-    // 10. Water-entry detection. Samples the tile at the body's mid-point —
-    //     using the middle (not the feet) avoids false positives when feet
-    //     are on the solid stone tile underneath a water tile.
-    const tx = Math.floor((this.pos.x + this.size.x / 2) / TILE_SIZE);
-    const ty = Math.floor((this.pos.y + this.size.y / 2) / TILE_SIZE);
-    const nowInWater = tilemap.at(tx, ty) === Tile.Water;
-    if (nowInWater && !this.inWater) this.didEnterWaterThisFrame = true;
-    this.inWater = nowInWater;
 
     this.syncSprite();
   }
@@ -154,29 +263,21 @@ export class Player implements Body {
   //
   // Visual brief: a small hooded cartographer in a pale near-white cloak,
   // with two gray-white boots and a darker satchel strap doubling as the
-  // visible arm. Three poses:
-  //   - idle   : feet at rest, arm at rest
-  //   - walk   : feet alternate horizontal offsets, arm swings opposite, body
-  //              bobs up 1 px at each mid-stride
-  //   - jump   : feet tucked together, arm raised diagonally up-and-forward
+  // visible arm. Three poses: idle, walk (foot/arm swing + body-bob), jump
+  // (feet together, diagonal arm). Water cast is applied uniformly via
+  // sprite.tint in syncSprite — drawFigure draws with original colors.
   private drawFigure(): void {
     const g = this.sprite;
     g.clear();
 
-    // Palette
-    const cloak = DB32.lightSteel; // pale near-white wool — main body
-    const cloakHi = DB32.white; // pure white — top-edge highlight
-    const cloakLo = DB32.heather; // muted blue-gray — hem shadow
-    const inside = DB32.valhalla; // deep shadow inside the hood
-    const eye = DB32.twine; // single warm pixel — the only visible spot of skin
-    const boots = DB32.heather; // gray-white boots, harmonize with the cloak
-    const strap = DB32.dimGray; // satchel strap / arm (darker, reads against the pale cloak)
+    const cloak = DB32.lightSteel;
+    const cloakHi = DB32.white;
+    const cloakLo = DB32.heather;
+    const inside = DB32.valhalla;
+    const eye = DB32.twine;
+    const boots = DB32.heather;
+    const strap = DB32.dimGray;
 
-    // Animation state. `stepOffset` is computed in update() so both the draw
-    // code and the footstep-event detection see the same value; here we just
-    // recompute `bodyBob` from the same sine phase.
-    //   stepOffset ∈ {-1, 0, +1} — quantized step swing (from update())
-    //   bodyBob ∈ {0, -1}         — 1-pixel vertical bounce at mid-stride
     const airborne = !this.onGround;
     const walking = this.onGround && this.vel.x !== 0;
     const stepOffset = this.stepOffset;
@@ -185,8 +286,8 @@ export class Player implements Body {
     // Feet — two 2×2 boots with a 2-pixel gap between them at rest.
     //   walking : left foot swings +stepOffset, right foot swings -stepOffset
     //             (always moving opposite — looks like alternating strides)
-    //   jumping : both feet pulled together at center
-    if (airborne) {
+    //   jumping/swimming : both feet pulled together at center
+    if (airborne || this.swimming) {
       g.rect(-2, -2, 2, 2).fill(boots);
       g.rect(0, -2, 2, 2).fill(boots);
     } else {
@@ -194,9 +295,7 @@ export class Player implements Body {
       g.rect(1 - stepOffset, -2, 2, 2).fill(boots);
     }
 
-    // Cloak — main body. 10 wide × 8 tall. Top row is highlighted, bottom row
-    // is shaded; the two thin bands give volume without needing a real outline.
-    // The whole upper body shifts by `bodyBob` while walking.
+    // Cloak — main body. 10 wide × 8 tall.
     g.rect(-5, -10 + bodyBob, 10, 8).fill(cloak);
     g.rect(-5, -10 + bodyBob, 10, 1).fill(cloakHi);
     g.rect(-5, -3 + bodyBob, 10, 1).fill(cloakLo);
@@ -205,20 +304,30 @@ export class Player implements Body {
     g.rect(-4, -16 + bodyBob, 8, 6).fill(cloak);
     g.rect(-4, -16 + bodyBob, 8, 1).fill(cloakHi);
 
-    // Inside the hood: deep shadow + a single warm pixel for the eye. The eye
-    // sits on the +x side so scale.x = -1 mirroring puts it on whichever side
-    // the character faces. While airborne the eye shifts up 2 px so he reads
-    // as "looking up" through the jump.
+    // Inside the hood: deep shadow + a single warm pixel for the eye.
     g.rect(-3, -15 + bodyBob, 6, 4).fill(inside);
     const eyeY = -13 + bodyBob + (airborne ? -2 : 0);
     g.rect(1, eyeY, 1, 1).fill(eye);
 
     // Arm — drawn as a 4-pixel diagonal "strap" across the cloak.
-    //   walking : shifts horizontally opposite to the step (arm/leg in
-    //             counter-phase reads as natural gait)
-    //   jumping : raised diagonally up-and-forward — the "leap" pose
-    //   idle    : at base position
-    if (airborne) {
+    //   walking  : shifts horizontally opposite to the step (arm/leg in
+    //              counter-phase reads as natural gait)
+    //   jumping  : raised diagonally up-and-forward — the "leap" pose
+    //   swimming : front-crawl. Two arms at chest height, lengths
+    //              alternating front/back so the figure reads as paddling
+    //              even though it isn't rotated.
+    //   idle     : at base position
+    if (this.swimming) {
+      const phase = Math.sin(this.elapsedTime * 5);
+      const frontLen = 3 + Math.round(phase * 2); // 1..5
+      const backLen = 3 - Math.round(phase * 2); // 5..1
+      for (let i = 0; i < frontLen; i++) {
+        g.rect(2 + i, -7, 1, 1).fill(strap);
+      }
+      for (let i = 0; i < backLen; i++) {
+        g.rect(-3 - i, -7, 1, 1).fill(strap);
+      }
+    } else if (airborne) {
       g.rect(0, -10, 1, 1).fill(strap);
       g.rect(1, -11, 1, 1).fill(strap);
       g.rect(2, -12, 1, 1).fill(strap);
@@ -246,5 +355,9 @@ export class Player implements Body {
     this.sprite.x = this.pos.x + this.size.x / 2;
     this.sprite.y = this.pos.y + this.size.y;
     this.sprite.scale.set(this.facing, 1);
+    // Binary water cast: any tile of the body in water → whole figure
+    // tinted blue; otherwise normal colors. PixiJS multiplies the tint
+    // into every pixel of the Graphics in one shot.
+    this.sprite.tint = this.bodyTouchesWater ? SUBMERGED_TINT : 0xffffff;
   }
 }

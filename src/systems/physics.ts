@@ -8,6 +8,9 @@ export interface Body {
   vel: Vec2; // px/s
   size: Vec2; // width/height in logical pixels
   onGround: boolean; // set by stepPhysics each tick
+  // If true, stepPhysics skips its normal gravity/terminal-velocity step —
+  // the caller is responsible for applying swim physics to `vel.y` instead.
+  swimming?: boolean;
 }
 
 // Advance one body by dt:
@@ -26,17 +29,23 @@ export interface Body {
 export function stepPhysics(body: Body, tilemap: Tilemap, dt: number): void {
   const wasGrounded = body.onGround;
 
-  if (!wasGrounded) {
-    // Airborne: normal asymmetric gravity.
-    const g = body.vel.y < 0 ? GRAVITY : GRAVITY * GRAVITY_FALL_MULT;
-    body.vel.y += g * dt;
-  } else if (body.vel.y > 0) {
-    // Grounded with leftover downward velocity (would be accumulated drift):
-    // clear it. vel.y < 0 here means a jump impulse was just applied — leave
-    // that alone.
-    body.vel.y = 0;
+  // Normal gravity is skipped when the body is swimming — swim physics is
+  // owned by the entity (see Player.update). stepPhysics still does the
+  // position update and tile collision so swimming bodies bonk on walls
+  // and floors the same way.
+  if (!body.swimming) {
+    if (!wasGrounded) {
+      // Airborne: normal asymmetric gravity.
+      const g = body.vel.y < 0 ? GRAVITY : GRAVITY * GRAVITY_FALL_MULT;
+      body.vel.y += g * dt;
+    } else if (body.vel.y > 0) {
+      // Grounded with leftover downward velocity (would be accumulated drift):
+      // clear it. vel.y < 0 here means a jump impulse was just applied — leave
+      // that alone.
+      body.vel.y = 0;
+    }
+    if (body.vel.y > TERMINAL_VELOCITY) body.vel.y = TERMINAL_VELOCITY;
   }
-  if (body.vel.y > TERMINAL_VELOCITY) body.vel.y = TERMINAL_VELOCITY;
 
   // Each frame starts not-grounded; physics below may flag it back to true.
   body.onGround = false;

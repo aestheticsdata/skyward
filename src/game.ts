@@ -89,7 +89,7 @@ export class Game {
     // surface renders over it.
     this.world.addChild(renderWaterBody(this.tilemap));
     this.waterSurface = new Graphics();
-    renderWaterSurfaceInto(this.waterSurface, this.tilemap, 0);
+    renderWaterSurfaceInto(this.waterSurface, this.tilemap, 0, -1);
     this.world.addChild(this.waterSurface);
 
     // Decorations (trees, bushes, rocks, mushrooms) go in the world layer
@@ -133,13 +133,18 @@ export class Game {
       // Water surface bob — runs only while the player is in water; the
       // surface snaps to rest as soon as they step out. Body never moves;
       // only the highlight/sheen strip ripples ±1 px around its rest line.
+      // Only the pool the player is currently inside ripples; other lakes
+      // in the level stay perfectly still.
+      const playerTx = Math.floor((this.player.pos.x + this.player.size.x / 2) / TILE_SIZE);
+      const playerTy = Math.floor((this.player.pos.y + this.player.size.y / 2) / TILE_SIZE);
+      const activeBodyId = this.player.inWater ? this.tilemap.waterBodyAt(playerTx, playerTy) : -1;
       if (this.player.inWater) {
         this.waterAnimTime += dt;
       } else {
         this.waterAnimTime = 0;
       }
       const surfaceOffset = Math.round(Math.sin(this.waterAnimTime * WATER_BOB_FREQ) * WATER_BOB_AMPLITUDE);
-      renderWaterSurfaceInto(this.waterSurface, this.tilemap, surfaceOffset);
+      renderWaterSurfaceInto(this.waterSurface, this.tilemap, surfaceOffset, activeBodyId);
 
       if (this.sketchbook.isVisible()) {
         // Sketchbook open: gameplay is paused. Only the close input is handled.
@@ -164,7 +169,8 @@ export class Game {
         this.player.update(this.input, dt, this.tilemap);
 
         // SFX driven by player one-shot event flags (set during update()).
-        // Walking sound swaps to a wet "floc" while the player is in water.
+        // Walking sound swaps to a wet "floc" while the player is wading
+        // on the bottom; swim strokes get the muffled underwater whoosh.
         if (this.player.didJumpThisFrame) this.audio.jump();
         if (this.player.didLandThisFrame) this.audio.land();
         if (this.player.didFootstepThisFrame) {
@@ -172,6 +178,7 @@ export class Game {
           else this.audio.footstep();
         }
         if (this.player.didEnterWaterThisFrame) this.audio.splash();
+        if (this.player.didSwimStrokeThisFrame) this.audio.swimStroke();
 
         // Landmarks: show/hide proximity prompts, open sketchbook on E.
         //   - Undiscovered landmarks: show the tutorial tooltip (first time

@@ -35,24 +35,31 @@ const TEST_LEVEL_ROWS = [
   '............................................................', // 0
   '............................................................', // 1
   '............................................................', // 2
-  '..........GGG..............................GGG..............', // 3 — upper L & R
-  '.............................GGG............................', // 4 — middle (only 2 up)
+  '..........GGG..............................GGG..............', // 3
+  '.............................GGG............................', // 4
   '...............................................GGG..........', // 5
-  '.....GGG................GGGG................................', // 6 — mid platforms
+  '.....GGG................GGGG................................', // 6
   '............................................................', // 7
-  'GGGGGG..GGGGGGGGGGGG..GGGGGGGGGGGGGGGGGGGG..GG..GGGGGGGGGGGG', // 8 — main floor, 3 gaps
-  'DDDDDD..DDDDDDDDDDDD..DDDDDDDDDDDDDDDDDDDD..DDD..DDDDDDDDDDD', // 9 — dirt
-  'SSSSSS..SSSSSSSSSSSS..SSSSSSSSSSSSSSSSSSSS..SS....SSSSSSSSSS', // 10 — stone, 3 shafts
-  'SSSSSS..SSSSSSSSSSSS..SSSSSSSSSSSSSSSSSS...............SSSSS', // 11 — shaft 3 widens LEFT (cols 40-43)
-  'SSSS......SSSSSSSSS....SSSSSSSSSSSSSSSS........SSSSSSSSSSSSS', // 12 — shaft 1 widens to 6, shaft 2 stays 4, shaft 3 widens to 8
-  'SSSSS....SSSSSSSSSS....SSSSSSSSSSSSSSSSSS....SSS..SSSSSSSSSS', // 13 — cavern ceiling
-  'SS........................................................SS', // 14 — cavern open
-  'SS........SS................SS...........SSS..............SS', // 15 — stepping stones
-  'SS........................................................SS', // 16 — cavern open
-  'SSSSSSSSSSSSSSWWWWWWWWWWWWWWWWWWSSSSSSSSSSSSSSSSSSSSSSSSSSSS', // 17 — cavern floor + lake
-  'SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS', // 18 — solid bottom
-  'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK', // 19 — dark stone
-  'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK', // 20
+  'GGGGGG..GGGGGGGGGGGG...GGGGGGGGGGGGGGGGGGG..GG..GGGGGGGGGGGG', // 8
+  'DDDDDD..DDDDDDDDDDDD..DDDDDDDDDDDDDDDDDDDD..DDD..DDDDDDDDDDD', // 9
+  'SSSSSS.SSSSSSSSSSSSS.SSSSSSSSSSSSSSSSSSSSS.SSS....SSSSSSSSSS', // 10
+  'SSSSS...SSSSSSSSSSSS..SSSSSSSSSSSSSSSSSS...............SSSSS', // 11
+  'SSSSSSS...SSSSSSSSS....SSSSSSSSSSSSSSSS........SSSSSSSSSSSSS', // 12
+  'SSSSS....SSSSSSSSSSSS..SSSSSSSSSSSSSSSSSS....SSS..SSSSSSSSSS', // 13
+  'SS........................................................SS', // 14
+  'SS........SS................SS...........SSS..............SS', // 15
+  'SS........................................................SS', // 16
+  'SSSSSSSSSSSSSSWWWWWWWWWWWWWWWWWWSSSSSSSSSSSSSSS.........SSSS', // 17
+  'SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS....SSSSS', // 18
+  'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK...KKKKKKK..KKKKKK', // 19
+  'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK...............KKKKKK', // 20
+  'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKWWWWWWKKKKKKKKKKK', // 21
+  'KKKKKKKKKKKKKKKKKKKKKKKKKK..KKKKKKKKKKKKKKKWWWWWWKKKKKKKKKKK', // 21
+  'KKKKKKKKKKKKKKKKKKKKKKKKKK...KKKKKKKKKKKKKKWWWWWWKKKKKKKKKKK', // 21
+  'KKKKKKKKKKKK....KKKKKKKKK.........K...KKKKWWWWWWWWWKKKKKKKKK', // 21
+  'KKKKKKKKKK.......KKKK......KKKKKKWWWWWWWWWWWWWWWKKKKKKKKKKKK', // 21
+  'KKKKKKKKKK..KKK........KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK', // 21
+  'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK', // 21
   'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK', // 21
 ] as const;
 
@@ -547,7 +554,7 @@ export const TEST_LEVEL_DECORATIONS: DecorationSpec[] = [
   inCavern(35, 17, drawMushroom),
   inCavern(40, 17, drawPebbles),
   inCavern(45, 17, drawMushroom),
-  inCavern(53, 17, drawMushroom),
+  // inCavern(53, 17, drawMushroom),
 ];
 
 export function loadTestLevel(): Tilemap {

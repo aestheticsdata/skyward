@@ -158,6 +158,44 @@ export class Audio {
     this.noise({ duration: 0.06, volume: 0.08, delay: 0.02 });
   }
 
+  // Muffled underwater swim stroke. Heavily low-pass filtered noise — kills
+  // all the bright "ssshhh" content (which would read as "in air") and
+  // leaves only a dull, bass-y whoosh. Pitch slowly sweeps down further to
+  // mimic a stroke being completed.
+  swimStroke(): void {
+    const ctx = this.ensureContext();
+    if (!this.noiseBuffer) {
+      const buf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      this.noiseBuffer = buf;
+    }
+
+    const start = ctx.currentTime;
+    const duration = 0.28;
+    const end = start + duration;
+
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    src.playbackRate.value = 0.5 + Math.random() * 0.2;
+
+    // Low-pass sweeps from 700 → 280 Hz — fully muffled, sourd.
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(700, start);
+    filter.frequency.exponentialRampToValueAtTime(280, end);
+    filter.Q.setValueAtTime(0.7, start);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.13, start + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+    src.connect(filter).connect(gain).connect(this.masterNode);
+    src.start(start);
+    src.stop(end);
+  }
+
   // Per-step splash while wading. Two layered noise sources, both filtered
   // and pitch-modulated, to imitate a real wet splash:
   //   - "Body" layer: band-pass that sweeps DOWN (1200 → 350 Hz), mimicking

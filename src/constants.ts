@@ -61,6 +61,43 @@ export const WALK_SPEED = 96; // horizontal max speed
 export const COYOTE_TIME = 0.08; // grace period to still jump after walking off a ledge
 export const JUMP_BUFFER = 0.1; // grace period for jump press just before landing
 
+// Water feel — one unified model:
+//   - In water on solid ground: walk at WADE_SPEED (slower than land).
+//   - In water off ground, no input: WATER_GRAVITY pulls down (slow sink,
+//     capped at WATER_TERMINAL_VEL). The player drops to the lake floor and
+//     can walk there.
+//   - In water off ground, jump held: vel.y = -SWIM_UP_SPEED (rises through
+//     the water).
+//   - In water off ground, down held: vel.y = SWIM_DOWN_SPEED (dives).
+// Exiting the water with upward velocity gets a small jump boost so the
+// player can pop onto a lake bank one tile above the surface.
+export const WADE_SPEED = 56; // horizontal walk speed while wading on a submerged floor
+export const SWIM_HORIZONTAL_SPEED = 60; // horizontal swim speed when off ground in water
+// Up-swim is intentionally slow so a brief jump-key tap only nudges the
+// player a few pixels — sustained pressing is required to actually ascend.
+// At 60 px/s a 0.1 s tap moves ~6 px (<½ tile); a held press climbs 1 tile
+// in ~0.27 s.
+export const SWIM_UP_SPEED = 60;
+export const SWIM_DOWN_SPEED = 110; // downward velocity while down is held in water
+export const WATER_GRAVITY = 160; // slow sink while floating idle in water
+export const WATER_TERMINAL_VEL = 90; // cap on the slow sink so it never feels like a freefall
+// Boost applied to vel.y the frame the player's midpoint leaves the water
+// while still moving up — turns the gentle swim-up momentum into a small
+// jump that can clear a one-tile bank. Tuned to JUMP_VELOCITY * 0.75 so an
+// exit pop reads as a deliberate jump out of the lake.
+export const WATER_EXIT_BOOST = 225;
+// Velocity allowed at the very moment of entering water. Caps the fall
+// momentum so the player floats on entry instead of plunging.
+export const WATER_ENTRY_VEL_CAP = 60;
+// Interval between two automatic swim-stroke SFX (the muffled "whoosh")
+// while the player is swimming (off ground in water) and moving.
+export const SWIM_STROKE_INTERVAL = 0.55;
+// Blue cast used on submerged pixels. Result = base * tint / 255 per
+// channel, so the red+green channels need to be reasonably low for white
+// pixels (the hood highlight) to read as obviously blue. 0x6090e8 takes
+// pure white down to (96, 144, 232) — clearly blue, not pale-white.
+export const SUBMERGED_TINT = 0x6090e8;
+
 // Camera smoothing: higher = snappier follow. Time-based so it's framerate-independent.
 // f = 1 - exp(-RATE * dt). At 60fps with RATE=10, f ≈ 0.155 per frame.
 export const CAMERA_SMOOTHING_RATE = 10;

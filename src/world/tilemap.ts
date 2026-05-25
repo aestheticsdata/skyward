@@ -48,11 +48,23 @@ export class Tilemap {
   readonly width: number;
   readonly height: number;
   readonly tiles: readonly Tile[];
+  // Per-tile water "body" id. Tiles that are part of the same 4-connected
+  // pool share the same positive id; non-water tiles get -1. Used so the
+  // water-surface animation only ripples the pool the player is currently
+  // standing in, leaving every other lake in the level still.
+  readonly waterBodyId: readonly number[];
 
   constructor(width: number, height: number, tiles: readonly Tile[]) {
     this.width = width;
     this.height = height;
     this.tiles = tiles;
+    this.waterBodyId = computeWaterBodies(width, height, tiles);
+  }
+
+  // Water body id at (tx, ty), or -1 if that tile isn't water.
+  waterBodyAt(tx: number, ty: number): number {
+    if (tx < 0 || tx >= this.width || ty < 0 || ty >= this.height) return -1;
+    return this.waterBodyId[ty * this.width + tx];
   }
 
   // Build a tilemap from human-readable ASCII rows (see CHAR_TO_TILE legend).
@@ -95,6 +107,31 @@ export class Tilemap {
   }
 }
 
+// 4-connected flood fill over Water tiles. Each connected pool gets a unique
+// non-negative id; all other tiles get -1. Runs once at tilemap construction.
+function computeWaterBodies(width: number, height: number, tiles: readonly Tile[]): number[] {
+  const ids = new Array<number>(width * height).fill(-1);
+  let next = 0;
+  const stack: number[] = [];
+  for (let i = 0; i < tiles.length; i++) {
+    if (tiles[i] !== Tile.Water || ids[i] !== -1) continue;
+    const id = next++;
+    stack.push(i);
+    while (stack.length > 0) {
+      const j = stack.pop() as number;
+      if (ids[j] !== -1) continue;
+      ids[j] = id;
+      const x = j % width;
+      const y = (j - x) / width;
+      if (x > 0 && tiles[j - 1] === Tile.Water && ids[j - 1] === -1) stack.push(j - 1);
+      if (x < width - 1 && tiles[j + 1] === Tile.Water && ids[j + 1] === -1) stack.push(j + 1);
+      if (y > 0 && tiles[j - width] === Tile.Water && ids[j - width] === -1) stack.push(j - width);
+      if (y < height - 1 && tiles[j + width] === Tile.Water && ids[j + width] === -1) stack.push(j + width);
+    }
+  }
+  return ids;
+}
+
 // Stable per-tile pseudo-random in [0, 1). Different tiles get reproducibly
 // different decoration patterns — we want a stone block to look the same every
 // time the level renders, never animated by frame.
@@ -126,8 +163,24 @@ export function renderTilemap(map: Tilemap): Graphics {
   return g;
 }
 
-// Static body of every water tile. Never animated — the bottom of the lake.
-// Called once at scene setup.
+// True for a water tile whose neighbor directly above is EMPTY (air) — only
+// then does the tile get the meniscus + animated surface treatment.
+// Crucially: water tiles capped by a stone/dirt block above are NOT surface
+// tiles. They sit inside the level body and render as solid blue, so a lake
+// passing under a stone overhang doesn't draw a fake "surface line"
+// underneath the stone.
+function isWaterSurface(map: Tilemap, tx: number, ty: number): boolean {
+  if (map.at(tx, ty) !== Tile.Water) return false;
+  return map.at(tx, ty - 1) === Tile.Empty;
+}
+
+// Static body of every water tile. Never animated.
+//   - Surface tile (water above is empty/solid): leave the top
+//     STATIC_BODY_TOP_OFFSET pixels blank — the animated surface fills them
+//     each frame.
+//   - Submerged tile (water above): fill the whole tile, no recess. That's
+//     what makes a deep lake look like one continuous pool instead of a
+//     stack of horizontal bands.
 export function renderWaterBody(map: Tilemap): Graphics {
   const g = new Graphics();
   for (let ty = 0; ty < map.height; ty++) {
@@ -135,8 +188,12 @@ export function renderWaterBody(map: Tilemap): Graphics {
       if (map.at(tx, ty) !== Tile.Water) continue;
       const x = tx * TILE_SIZE;
       const y = ty * TILE_SIZE;
-      const bodyTop = y + STATIC_BODY_TOP_OFFSET;
-      g.rect(x, bodyTop, TILE_SIZE, y + TILE_SIZE - bodyTop).fill(TILE_COLORS[Tile.Water]);
+      if (isWaterSurface(map, tx, ty)) {
+        const bodyTop = y + STATIC_BODY_TOP_OFFSET;
+        g.rect(x, bodyTop, TILE_SIZE, y + TILE_SIZE - bodyTop).fill(TILE_COLORS[Tile.Water]);
+      } else {
+        g.rect(x, y, TILE_SIZE, TILE_SIZE).fill(TILE_COLORS[Tile.Water]);
+      }
     }
   }
   return g;
@@ -181,22 +238,28 @@ export function renderRockBackground(width: number, startY: number, endY: number
 // the player is in the water. Rebuilt each frame into the SAME Graphics so
 // the bottom-of-lake static body never moves.
 //
+// Only renders for SURFACE tiles (water with non-water above). Submerged
+// tiles get no top edge treatment so a deep lake reads as one pool.
+//
 // `surfaceOffset` is in pixels: 0 = rest, negative = surface lifted (ripple
 // up), positive = surface dipped (ripple down). Always rounded to an integer
-// by the caller so the surface stays on the pixel grid.
+// by the caller so the surface stays on the pixel grid. Applied ONLY to the
+// pool whose id matches `activeBodyId`; every other water surface in the
+// level stays at rest. Pass -1 (or any unused id) to keep everything still.
 //
 // The animated strip extends from `sy` down to the static body top, so as
 // the surface moves up, the visible water grows by the offset (filler is
 // the same color as the static body). No gap ever appears between strip
 // and body.
-export function renderWaterSurfaceInto(g: Graphics, map: Tilemap, surfaceOffset: number): void {
+export function renderWaterSurfaceInto(g: Graphics, map: Tilemap, surfaceOffset: number, activeBodyId: number): void {
   g.clear();
   for (let ty = 0; ty < map.height; ty++) {
     for (let tx = 0; tx < map.width; tx++) {
-      if (map.at(tx, ty) !== Tile.Water) continue;
+      if (!isWaterSurface(map, tx, ty)) continue;
       const x = tx * TILE_SIZE;
       const y = ty * TILE_SIZE;
-      const sy = y + WATER_REST_DEPRESSION + surfaceOffset;
+      const localOffset = map.waterBodyAt(tx, ty) === activeBodyId ? surfaceOffset : 0;
+      const sy = y + WATER_REST_DEPRESSION + localOffset;
       const bodyTop = y + STATIC_BODY_TOP_OFFSET;
       // Surface highlight (the lit "meniscus" line).
       g.rect(x, sy, TILE_SIZE, 1).fill(DB32.cornflower);

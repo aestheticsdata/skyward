@@ -1,5 +1,6 @@
 import { DB32 } from '@constants';
 import type { Entity } from '@entities/entity';
+import type { Vec2 } from '@types';
 import { Container, Graphics } from 'pixi.js';
 
 // Body bob frequency in Hz. 2 Hz reads as a gentle walking gait — too
@@ -26,9 +27,12 @@ export interface RabbitSpec {
   facing?: 1 | -1;
 }
 
-// A small rabbit that paces a fixed strip of platform. Purely decorative
-// — no collision with the player or terrain, no interaction. The Game's
-// per-frame entity update loop drives the motion + animation.
+// A small rabbit that paces a fixed strip of platform. Mostly decorative
+// — no terrain collision, no E-key interaction. The Game's per-frame
+// entity update loop drives motion + animation. ONE thing it does
+// expose: AABB overlap with the player, so Game can fire the "did you
+// meet your first rabbit?" popup the first time the player walks into
+// any rabbit.
 //
 // The rabbit deliberately does NOT use the tilemap to detect edges. It
 // uses the minX/maxX bounds the level author passes in. This makes
@@ -47,6 +51,14 @@ export class Rabbit implements Entity {
   private readonly body: Graphics;
   private elapsedTime = 0;
   private currentBobFrame = -1;
+
+  // Rabbit-body extent in entity-local coordinates (around posX, posY=foot).
+  // Used for AABB overlap with the player. These match the values in
+  // drawRabbit so the hitbox tracks the visible silhouette.
+  private static readonly BODY_LEFT = -4; // tail-tip x
+  private static readonly BODY_RIGHT = 5; // front-ear x + 1 (exclusive)
+  private static readonly BODY_TOP_FROM_FOOT = -10; // tallest pixel above feet
+  private static readonly BODY_BOTTOM_FROM_FOOT = 0; // feet
 
   constructor(spec: RabbitSpec) {
     this.posX = spec.x;
@@ -93,6 +105,21 @@ export class Rabbit implements Entity {
     drawRabbit(this.body, bobFrame);
   }
 
+  // AABB overlap between the rabbit's body silhouette and the player's
+  // AABB. World-space coords. Used by Game to detect the "first rabbit
+  // encounter" greeting.
+  isPlayerInRange(playerPos: Vec2, playerSize: Vec2): boolean {
+    const rabbitLeft = this.posX + Rabbit.BODY_LEFT;
+    const rabbitRight = this.posX + Rabbit.BODY_RIGHT;
+    const rabbitTop = this.posY + Rabbit.BODY_TOP_FROM_FOOT;
+    const rabbitBottom = this.posY + Rabbit.BODY_BOTTOM_FROM_FOOT;
+    const playerLeft = playerPos.x;
+    const playerRight = playerPos.x + playerSize.x;
+    const playerTop = playerPos.y;
+    const playerBottom = playerPos.y + playerSize.y;
+    return playerLeft < rabbitRight && playerRight > rabbitLeft && playerTop < rabbitBottom && playerBottom > rabbitTop;
+  }
+
   private syncSprite(): void {
     this.sprite.x = this.posX;
     this.sprite.y = this.posY;
@@ -103,7 +130,8 @@ export class Rabbit implements Entity {
 // Drawn around (0, 0) with feet at y=0, head on the RIGHT (positive x).
 // 9 wide × 9 tall. Animation alternates a 1-px body bob and a small
 // shift of the visible feet so the rabbit reads as walking, not sliding.
-function drawRabbit(g: Graphics, bobFrame: number): void {
+// Exported so the rabbit-greeting popup can render an oversized copy.
+export function drawRabbit(g: Graphics, bobFrame: number): void {
   const fur = DB32.twine; // warm tan
   const furHi = DB32.pancho; // lighter tan highlight
   const furShadow = DB32.oiledCedar; // brown shadow

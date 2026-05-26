@@ -49,8 +49,8 @@ const OLD_KEEP_ROWS = [
   'BB.....PP......PP......PP..................................BB', //  4
   'BB.....PP......PP......PP..................................BB', //  5  upper-floor columns (capitals)
   'BB.....PP......PP......PP..................................BB', //  6
-  'BB.....PP......PP......PP..................................BB', //  7  upper-floor columns (bases)
-  'BBFFFFFFFFFFFFFFFFFFFFFFFFFFFF.............................BB', //  8  UPPER FLOOR (cols 2-28)
+  'BB.....PP......PP......PP......................FFFFFFFFFFFFBB', //  7  upper-floor columns (bases)
+  'BBFFFFFFFFFFFFFFFFFFFFFFFFFFFF....................PP.......BB', //  8  UPPER FLOOR (cols 2-28)
   'BBFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF..............PP.......BB', //  9  lower room (above lower floor)
   'BBFFFFFFFFFFFFFFFFFFFFFFFFFFFF...........FFFFFFFFFFFFFFFFFFBB', // 10  step 4 floating (cols 29-30)
   'BBFFFFFFFFFFFFFFFFFFFFFFFFFFFF.........FF..................BB', // 11
@@ -58,11 +58,11 @@ const OLD_KEEP_ROWS = [
   'BB.................................FF......................BB', // 13
   'BBFFFFFFFFFFFFFFFFFFFFFFFF.......FF........................BB', // 14  step 2 floating (cols 33-34)
   'BB....PP......PP......PP...................................BB', // 15
-  'BB....PP......PP......PP...............FF..................BB', // 16  step 1 floating (cols 35-36)
+  'BB....PP......PP......PP...............FFFFFFFFFFFFFFFFFFFFBB', // 16  step 1 floating (cols 35-36)
   'BB....PP......PP......PP...................................BB', // 17  lower-room columns
   'BBFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF..FFFFFFFFFFFFFFFFFFFFFBB', // 18  LOWER FLOOR (cols 2-35, 38-47) — hole at 36-37
-  'BB.........................................................BB', // 19  basement chamber (top)
-  'BB.......................................F.................BB', // 20  basement climb-out step (col 41)
+  'BB.....PP..............PP..................................BB', // 19  basement chamber (top)
+  'BB.....PP..............PP..................................BB', // 20  basement climb-out step (col 41)
   'BB.....PP..............PP..................................BB', // 21  basement gold columns
   'BBFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFBB', // 22  BASEMENT FLOOR (cols 2-47)
   'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB', // 23  foundation top

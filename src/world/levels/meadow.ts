@@ -655,25 +655,30 @@ export const meadowLevel: LevelSpec = {
       }),
 
       // Two birds flying back and forth across the FULL width of the
-      // level, high enough above the spawn platform (row 8) that they're
-      // visible from the player's eye-line when standing on the grass —
-      // no jumping needed.
+      // level, at altitudes the player can actually CROSS by standing
+      // on specific platforms. (Earlier altitudes were so high above
+      // the surface that the player could never reach a bird, so the
+      // greeting popup was effectively unreachable.)
       //
-      // Flight altitude: row 3 area (y=48..56). The camera at the
-      // spawn shows roughly y=24..248, so this puts the birds in the
-      // upper-third of the screen — clearly in the sky band above any
-      // surface platform.
+      // Bird 1 — at the FIRST grass PLATFORM (row 6: cols 5-7 on the
+      // left of spawn, cols 24-27 on the right). NOT the ground; the
+      // player has to jump up onto one of those small platforms to
+      // cross this bird. Body Y range = posY − 3 to posY = 85..88,
+      // player's AABB standing on row 6 is y=80..96 — overlap.
       new Bird({
         x: 8 * TILE_SIZE,
-        y: 3 * TILE_SIZE + 4,
+        y: 88,
         speed: 60,
         minX: 1 * TILE_SIZE,
         maxX: 59 * TILE_SIZE,
         facing: 1,
       }),
+      // Bird 2 — at the HIGHEST grass platform (row 3, cols 10-12 and
+      // 43-45). Body Y 39..42, player's AABB on row 3 is y=32..48.
+      // Player has to climb all the way up to meet this one.
       new Bird({
         x: 42 * TILE_SIZE,
-        y: 4 * TILE_SIZE + 10,
+        y: 42,
         speed: 54,
         minX: 1 * TILE_SIZE,
         maxX: 59 * TILE_SIZE,

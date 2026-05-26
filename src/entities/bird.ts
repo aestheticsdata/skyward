@@ -1,5 +1,6 @@
 import { DB32 } from '@constants';
 import type { Entity } from '@entities/entity';
+import type { Vec2 } from '@types';
 import { Container, Graphics } from 'pixi.js';
 
 // Wing-flap frequency in Hz. 8 Hz reads as small fast-flapping bird at
@@ -101,6 +102,32 @@ export class Bird implements Entity {
     // any future asymmetric refinement (beak, tail) reads correctly.
     this.sprite.scale.set(this.facing, 1);
   }
+
+  // AABB overlap between the bird's wing-spread silhouette and the
+  // player's AABB. World-space coords. Used by Game to detect the
+  // player's first-bird encounter — only ever triggers when the
+  // player happens to be standing on a platform tall enough to put
+  // them in the bird flight band.
+  isPlayerInRange(playerPos: Vec2, playerSize: Vec2): boolean {
+    const birdLeft = this.posX + Bird.BODY_LEFT;
+    const birdRight = this.posX + Bird.BODY_RIGHT;
+    const birdTop = this.posY + Bird.BODY_TOP;
+    const birdBottom = this.posY + Bird.BODY_BOTTOM;
+    const playerLeft = playerPos.x;
+    const playerRight = playerPos.x + playerSize.x;
+    const playerTop = playerPos.y;
+    const playerBottom = playerPos.y + playerSize.y;
+    return playerLeft < birdRight && playerRight > birdLeft && playerTop < birdBottom && playerBottom > birdTop;
+  }
+
+  // Bird silhouette extent in entity-local coordinates. The bird is the
+  // classic "M": wings spread from x=-3 to x=3, wing tips reach up to
+  // y=-3 in the wings-up frame, body line at y=-2. The bottom of the
+  // hitbox is at y=0 (the anchor point).
+  private static readonly BODY_LEFT = -3;
+  private static readonly BODY_RIGHT = 4;
+  private static readonly BODY_TOP = -3;
+  private static readonly BODY_BOTTOM = 0;
 }
 
 // Drawn around (0, 0). The bird is essentially the classic "M" / "V"
@@ -109,7 +136,10 @@ export class Bird implements Entity {
 //
 // Frame 0 — wings down (mid-flap): tips at y = -1.
 // Frame 1 — wings up (top of flap): tips at y = -3.
-function drawBird(g: Graphics, wingFrame: number, color: number): void {
+//
+// Exported so the greeting popup can render an oversized copy when
+// the player meets their first bird.
+export function drawBird(g: Graphics, wingFrame: number, color: number): void {
   // Body — 3 px wide × 1 tall, centred. Constant across frames.
   g.rect(-1, -2, 3, 1).fill(color);
 

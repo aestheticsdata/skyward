@@ -163,12 +163,21 @@ export class Tilemap {
     return this.tiles[ty * this.width + tx];
   }
 
-  // Out-of-bounds tiles are treated as solid so every level has implicit walls.
-  // Inside the level, solidity comes from TILE_SOLID (Water is passable).
+  // Out-of-bounds tile solidity:
+  //   - Left/right (tx < 0 or tx >= width) → SOLID (implicit side walls)
+  //   - Bottom    (ty >= height)            → SOLID (implicit floor)
+  //   - Top       (ty < 0)                  → NOT SOLID (open sky)
+  //
+  // The top exception matters: without it, the player's max jump from
+  // a high platform (e.g. the meadow's row-3 grass islands) is clipped
+  // because the world top acts as an invisible ceiling — the jump
+  // feels short on the highest platforms. Indoor levels that need a
+  // ceiling provide their own with brick tiles at the top rows;
+  // outdoor levels intentionally leave the top open so the camera
+  // can follow the player into the sky.
   isSolid(tx: number, ty: number): boolean {
-    if (tx < 0 || tx >= this.width || ty < 0 || ty >= this.height) {
-      return true;
-    }
+    if (tx < 0 || tx >= this.width || ty >= this.height) return true;
+    if (ty < 0) return false;
     return TILE_SOLID[this.tiles[ty * this.width + tx]];
   }
 }

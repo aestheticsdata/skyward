@@ -1,11 +1,15 @@
-import { TILE_SIZE } from '@constants';
+import { DB32, TILE_SIZE } from '@constants';
+import { Bird, drawBird } from '@entities/bird';
 import { Decoration } from '@entities/decoration';
 import type { Entity, InteractContext } from '@entities/entity';
+import { drawFishLarge, Fish } from '@entities/fish';
 import { Landmark } from '@entities/landmark';
 import { Player } from '@entities/player';
+import { drawRabbit, Rabbit } from '@entities/rabbit';
 import { Audio } from '@systems/audio';
 import { Camera } from '@systems/camera';
-import { Input, KEYS_INTERACT, KEYS_RESPAWN } from '@systems/input';
+import { Greeting } from '@systems/greeting';
+import { Input, KEYS_DOWN, KEYS_INTERACT, KEYS_JUMP, KEYS_LEFT, KEYS_RESPAWN, KEYS_RIGHT } from '@systems/input';
 import { Sketchbook } from '@systems/sketchbook';
 import { WorldState } from '@systems/world-state';
 import type { Level } from '@world/level';
@@ -49,6 +53,10 @@ export class Game {
   private readonly input: Input;
   private readonly audio: Audio;
   private readonly sketchbook: Sketchbook;
+  // Single greeting overlay reused for both first-rabbit and first-fish
+  // encounters (and any future "you just met X" popup). Only one
+  // popup can be visible at a time anyway since gameplay pauses.
+  private readonly greeting: Greeting;
   private readonly worldState: WorldState;
 
   // Camera-offset world container.
@@ -82,6 +90,7 @@ export class Game {
     this.input = new Input();
     this.audio = new Audio();
     this.sketchbook = new Sketchbook();
+    this.greeting = new Greeting();
     this.worldState = new WorldState();
 
     // Container hierarchy. Build empty containers first; populate later.
@@ -113,6 +122,9 @@ export class Game {
     // Sketchbook overlay on stage above the world so it stays fixed on
     // screen (not affected by the camera) and renders on top of everything.
     app.stage.addChild(this.sketchbook.container);
+
+    // Greeting overlay sits on top of the sketchbook in z-order.
+    app.stage.addChild(this.greeting.container);
 
     // Placeholder; mountLevelContent() overwrites this immediately.
     this.waterSurface = new Graphics();
@@ -147,7 +159,21 @@ export class Game {
       const surfaceOffset = Math.round(Math.sin(this.waterAnimTime * WATER_BOB_FREQ) * WATER_BOB_AMPLITUDE);
       renderWaterSurfaceInto(this.waterSurface, tilemap, surfaceOffset, activeBodyId);
 
-      if (this.sketchbook.isVisible()) {
+      if (this.greeting.isVisible()) {
+        // Greeting popup open: gameplay is paused (rabbits, fish,
+        // birds, pumpkin, player — nothing updates). Closes on a fresh
+        // movement-key press. We use isAnyPressed (not isAnyDown) so the
+        // popup doesn't close on the same frame it opens just because
+        // the player was already holding a direction key.
+        if (
+          this.input.isAnyPressed(KEYS_LEFT) ||
+          this.input.isAnyPressed(KEYS_RIGHT) ||
+          this.input.isAnyPressed(KEYS_JUMP) ||
+          this.input.isAnyPressed(KEYS_DOWN)
+        ) {
+          this.greeting.hide();
+        }
+      } else if (this.sketchbook.isVisible()) {
         // Sketchbook open: gameplay is paused. Only the close input is handled.
         if (this.input.isAnyPressed(KEYS_INTERACT)) {
           this.audio.closeBook();
@@ -178,6 +204,13 @@ export class Game {
         for (const entity of this.currentEntities) {
           entity.update?.(dt);
         }
+
+        // First-encounter checks. Each fires exactly ONCE per Game
+        // instance — the corresponding WorldState flag short-circuits
+        // the rest of every future call.
+        this.checkRabbitEncounter();
+        this.checkFishEncounter();
+        this.checkBirdEncounter();
 
         this.runInteractionLoop();
 
@@ -354,6 +387,78 @@ export class Game {
         // different array. Continuing the loop would touch stale data or
         // index past the new array.
         break;
+      }
+    }
+  }
+
+  // Detect the FIRST time the player overlaps any Rabbit. Sets the
+  // 'rabbit-greeted' world-state flag and opens the greeting popup
+  // with the rabbit subject. Subsequent calls do nothing because the
+  // flag short-circuits the search. Cross-level: the flag survives
+  // transitions, so meeting a rabbit in the meadow won't fire again
+  // if a rabbit ever shows up in another level.
+  private checkRabbitEncounter(): void {
+    if (this.worldState.get('rabbit-greeted')) return;
+    for (const entity of this.currentEntities) {
+      if (!(entity instanceof Rabbit)) continue;
+      if (entity.isPlayerInRange(this.player.pos, this.player.size)) {
+        this.worldState.set('rabbit-greeted', true);
+        this.greeting.show({
+          drawSubject: (g) => drawRabbit(g, 0),
+          subjectScale: 4,
+          speech: 'Est-ce que tu as une carotte buddy ?',
+        });
+        return;
+      }
+    }
+  }
+
+  // Same as checkRabbitEncounter but for fish. Fires once across the
+  // entire session on first AABB overlap with any Fish. The popup
+  // shows the SAME colour as the fish the player actually bumped into
+  // (orange / yellow / red — whichever entity triggered the check),
+  // not a hardcoded default. drawFishLarge is ~22×10 at native size;
+  // scale ×3 fills the popup frame at the same visual weight as the
+  // rabbit at ×4.
+  private checkFishEncounter(): void {
+    if (this.worldState.get('fish-greeted')) return;
+    for (const entity of this.currentEntities) {
+      if (!(entity instanceof Fish)) continue;
+      if (entity.isPlayerInRange(this.player.pos, this.player.size)) {
+        this.worldState.set('fish-greeted', true);
+        const touchedColor = entity.color;
+        this.greeting.show({
+          drawSubject: (g) => drawFishLarge(g, touchedColor),
+          subjectScale: 3,
+          speech: 'oh tiens ?! Un gros poisson bizarre !',
+        });
+        return;
+      }
+    }
+  }
+
+  // First-bird encounter. Same one-shot semantics as the rabbit/fish
+  // checks, with one extra guard: SKIPPED while the player is airborne.
+  // Pausing gameplay mid-jump would freeze the player suspended in the
+  // air — visually jarring. The user explicitly asked to avoid that.
+  // So the bird only "stops to chat" if it crosses the player when
+  // they're standing on a platform (typically the high row-3/row-4
+  // grass islands where the bird flight band sits).
+  private checkBirdEncounter(): void {
+    if (this.worldState.get('bird-greeted')) return;
+    if (!this.player.onGround) return;
+    for (const entity of this.currentEntities) {
+      if (!(entity instanceof Bird)) continue;
+      if (entity.isPlayerInRange(this.player.pos, this.player.size)) {
+        this.worldState.set('bird-greeted', true);
+        this.greeting.show({
+          // Wings UP (frame 1) reads as "caught mid-flap" — a single
+          // frozen flight pose, the right vibe for "stopped to chat."
+          drawSubject: (g) => drawBird(g, 1, DB32.valhalla),
+          subjectScale: 8,
+          speech: 'un oiseau mutant !',
+        });
+        return;
       }
     }
   }

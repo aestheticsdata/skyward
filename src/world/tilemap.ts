@@ -1,8 +1,29 @@
 import { DB32, TILE_SIZE } from '@constants';
 import { Graphics } from 'pixi.js';
 
+// True-neutral dark greys for the crypt — outside the DB32 palette on
+// purpose. Every dark DB32 tone (valhalla, opal, loulou) carries a
+// chromatic tint that reads as purple/green/blue at small scale. These
+// two are RGB-balanced (R=G=B) so they're pure grey, no bias.
+const CRYPT_WALL = 0x202020; // near-black neutral grey (wall base)
+const CRYPT_FLOOR = 0x303030; // slightly lighter neutral grey (floor base)
+const CRYPT_HI = 0xcfcfcf; // bright cool-white "reflet" highlight
+const CRYPT_LO = 0x000000; // pure black mortar
+
 // Tile type. Uses a const object (not enum) so it plays nicely with
 // `isolatedModules` in tsconfig.
+//
+// Three material families currently:
+//   - Outdoor: Grass / Dirt / Stone / DarkStone — used by the meadow.
+//   - Castle:  CastleBrick (wall) / CastleFloor (polished slabs) /
+//              GoldPillar (classical column). Used by the Old Keep.
+//              Neutral cool-grey, walls darker, floor lighter, pillars
+//              warm gold for contrast.
+//   - Crypt:   CryptBrick / CryptFloor. Used by the Old Keep's crypt.
+//              VERY dark palette — almost-black masonry that catches just
+//              enough candlelight to read. The crypt is meant to feel
+//              like a cosy hideout deep underground.
+// Water is shared (lakes happen in both biomes).
 export const Tile = {
   Empty: 0,
   Grass: 1,
@@ -10,6 +31,11 @@ export const Tile = {
   Stone: 3,
   DarkStone: 4,
   Water: 5,
+  CastleBrick: 6,
+  CastleFloor: 7,
+  GoldPillar: 8,
+  CryptBrick: 9,
+  CryptFloor: 10,
 } as const;
 
 export type Tile = (typeof Tile)[keyof typeof Tile];
@@ -22,6 +48,11 @@ const CHAR_TO_TILE: Record<string, Tile> = {
   S: Tile.Stone,
   K: Tile.DarkStone,
   W: Tile.Water,
+  B: Tile.CastleBrick,
+  F: Tile.CastleFloor,
+  P: Tile.GoldPillar,
+  c: Tile.CryptBrick,
+  v: Tile.CryptFloor,
 };
 
 const TILE_COLORS: Record<Tile, number> = {
@@ -31,6 +62,31 @@ const TILE_COLORS: Record<Tile, number> = {
   [Tile.Stone]: DB32.heather,
   [Tile.DarkStone]: DB32.topaz,
   [Tile.Water]: DB32.venice,
+  // CastleBrick — neutral mid-grey (dimGray). The first cut used
+  // deepKoamaru, which reads as muted purple-blue: wrong for the
+  // grey-stone reference and explicitly disliked. dimGray is a true
+  // neutral grey — no purple, no blue. Highlight + shadow come from
+  // heather + valhalla in drawCastleBrick.
+  [Tile.CastleBrick]: DB32.dimGray,
+  // CastleFloor — one notch LIGHTER than the wall (heather over dimGray),
+  // so polished slabs read as catching ambient candle light. Still in the
+  // grey family, slight cool tint that says "stone."
+  [Tile.CastleFloor]: DB32.heather,
+  // GoldPillar — warm gold base. The big chromatic contrast against the
+  // surrounding cool greys is what makes a column read as "ornamental,
+  // not structural" at a glance. rainforest is a mid-gold/olive that
+  // takes goldenFizz highlights and stinger shadows beautifully.
+  [Tile.GoldPillar]: DB32.rainforest,
+  // CryptBrick — TRUE neutral dark grey (custom, outside DB32). DB32's
+  // dark tones (valhalla, opal, loulou) all carry a tint — valhalla pulls
+  // blue/purple, opal pulls green, loulou pulls purple. The user wants
+  // grey, not tinted dark. 0x202020 is RGB(32,32,32): channels equal,
+  // no chromatic bias, nearly black but readable against the pure-black
+  // crypt backdrop.
+  [Tile.CryptBrick]: CRYPT_WALL,
+  // CryptFloor — one notch lighter than the wall (still neutral grey)
+  // so the floor catches just enough candlelight to walk by.
+  [Tile.CryptFloor]: CRYPT_FLOOR,
 };
 
 // Solid tiles block movement. Water is intentionally NOT solid — we want the
@@ -42,6 +98,11 @@ const TILE_SOLID: Record<Tile, boolean> = {
   [Tile.Stone]: true,
   [Tile.DarkStone]: true,
   [Tile.Water]: false,
+  [Tile.CastleBrick]: true,
+  [Tile.CastleFloor]: true,
+  [Tile.GoldPillar]: true,
+  [Tile.CryptBrick]: true,
+  [Tile.CryptFloor]: true,
 };
 
 export class Tilemap {
@@ -310,6 +371,21 @@ function drawTile(g: Graphics, t: Tile, x: number, y: number, tx: number, ty: nu
     case Tile.DarkStone:
       drawDarkStone(g, x, y, ty);
       break;
+    case Tile.CastleBrick:
+      drawCastleBrick(g, x, y, tx, ty);
+      break;
+    case Tile.CastleFloor:
+      drawCastleFloor(g, x, y, tx, ty);
+      break;
+    case Tile.GoldPillar:
+      drawGoldPillar(g, x, y);
+      break;
+    case Tile.CryptBrick:
+      drawCryptBrick(g, x, y, tx, ty);
+      break;
+    case Tile.CryptFloor:
+      drawCryptFloor(g, x, y, ty);
+      break;
   }
 }
 
@@ -450,15 +526,7 @@ function drawBrick(
 // odd rows shift by +4 px (running-bond stagger). Brick row index is
 // global (ty * 2 + halfRow), so the stagger reads continuously across
 // vertically adjacent tiles.
-function drawBrickPattern(
-  g: Graphics,
-  x: number,
-  y: number,
-  ty: number,
-  base: number,
-  hi: number,
-  lo: number,
-): void {
+function drawBrickPattern(g: Graphics, x: number, y: number, ty: number, base: number, hi: number, lo: number): void {
   for (let halfRow = 0; halfRow < 2; halfRow++) {
     const brickY = y + halfRow * 8;
     const brickRowIndex = ty * 2 + halfRow;
@@ -489,6 +557,133 @@ function drawDarkStone(g: Graphics, x: number, y: number, ty: number): void {
   // topaz base, heather highlight (lighter than base), valhalla shadow
   // (almost black). Reads as the same mason work, deeper in the earth.
   drawBrickPattern(g, x, y, ty, TILE_COLORS[Tile.DarkStone], DB32.heather, DB32.valhalla);
+}
+
+// Dressed castle masonry. Same running-bond pattern as Stone/DarkStone, but
+// the palette is a neutral mid-grey with a cool top highlight and near-black
+// mortar. Reads as "cut stone built for a wall, not raw cave rock." The
+// grey was chosen explicitly to avoid any purple/violet tint — the previous
+// deepKoamaru base was rejected for that reason.
+function drawCastleBrick(g: Graphics, x: number, y: number, tx: number, ty: number): void {
+  drawBrickPattern(g, x, y, ty, TILE_COLORS[Tile.CastleBrick], DB32.heather, DB32.valhalla);
+
+  // Occasional darker rivet / fixing point on the face — about one brick in
+  // eight. Small touch that suggests the wall is held together by ironwork,
+  // a recurring motif in Amiga castle interiors.
+  if (tileHash(tx, ty, 130) < 0.12) {
+    const rx = 3 + Math.floor(tileHash(tx, ty, 131) * (TILE_SIZE - 6));
+    const ry = 3 + Math.floor(tileHash(tx, ty, 132) * (TILE_SIZE - 6));
+    g.rect(x + rx, y + ry, 1, 1).fill(DB32.valhalla);
+  }
+}
+
+// Polished castle flagstone. One notch LIGHTER than the wall (heather vs
+// dimGray) so the floor catches more ambient light — the reference shows
+// the same hierarchy: walls darker, floor brighter, both clearly the same
+// "indoor stone" family. Highlight is lightSteel (the strongest cool light
+// the palette gives short of white) so the polished sheen reads even in
+// dim corners.
+function drawCastleFloor(g: Graphics, x: number, y: number, tx: number, ty: number): void {
+  drawBrickPattern(g, x, y, ty, TILE_COLORS[Tile.CastleFloor], DB32.lightSteel, DB32.dimGray);
+
+  // Very sparse polish glint — a single bright pixel on roughly one tile in
+  // twelve. Mimics candlelight catching a worn edge. Same hash channel as
+  // grass speckle so we never collide with another tile's variation.
+  if (tileHash(tx, ty, 140) < 0.08) {
+    const px = 4 + Math.floor(tileHash(tx, ty, 141) * (TILE_SIZE - 8));
+    const py = 4 + Math.floor(tileHash(tx, ty, 142) * (TILE_SIZE - 8));
+    g.rect(x + px, y + py, 1, 1).fill(DB32.white);
+  }
+}
+
+// Crypt masonry. Same running-bond pattern as CastleBrick but in true
+// neutral dark greys with BRIGHT WHITE highlights on the top bevel —
+// the "reflets blancs" the user explicitly asked for. The contrast
+// (near-black base + near-white edge) reads as polished dark stone
+// catching candlelight, not the muted purple/green/blue tones the DB32
+// dark colours produce.
+function drawCryptBrick(g: Graphics, x: number, y: number, tx: number, ty: number): void {
+  drawBrickPattern(g, x, y, ty, TILE_COLORS[Tile.CryptBrick], CRYPT_HI, CRYPT_LO);
+
+  // Sparse pure-white sparkle — about one brick in twelve catches an
+  // extra glint on its face. Reinforces the "reflets blancs" feel
+  // without being busy.
+  if (tileHash(tx, ty, 150) < 0.08) {
+    const cx = 2 + Math.floor(tileHash(tx, ty, 151) * (TILE_SIZE - 4));
+    const cy = 2 + Math.floor(tileHash(tx, ty, 152) * (TILE_SIZE - 4));
+    g.rect(x + cx, y + cy, 1, 1).fill(DB32.white);
+  }
+}
+
+// Crypt floor — one notch lighter than the wall so the floor catches
+// more of the candlelight, just enough to walk by. Same dark brick
+// pattern, same bright white highlights.
+function drawCryptFloor(g: Graphics, x: number, y: number, ty: number): void {
+  drawBrickPattern(g, x, y, ty, TILE_COLORS[Tile.CryptFloor], CRYPT_HI, CRYPT_LO);
+}
+
+// Golden classical column. Vertical "round column" shading per tile: a
+// bright fluting line on the left (catching the light), a deep shadow band
+// on the right (the column receding into the room), and a centre seam to
+// suggest the cylindrical face. Not the brick pattern — pillars in the
+// reference read as one continuous polished surface, not stacked stones.
+//
+// Each tile is self-contained: two pillar tiles stacked vertically still
+// produce a continuous column because the per-tile pattern is identical
+// top-to-bottom. Phase-3 polish can add capitals (when the tile above is
+// empty) and bases (tile below is floor) by extending this with neighbor
+// awareness in renderTilemap.
+function drawGoldPillar(g: Graphics, x: number, y: number): void {
+  const goldHi = DB32.goldenFizz;
+  const goldShadow = DB32.stinger;
+  const goldDeepShadow = DB32.oiledCedar;
+
+  // Base is already filled by drawTile with TILE_COLORS[Tile.GoldPillar]
+  // (rainforest). The flutes carve light/dark stripes into that base.
+
+  // Bright catch-light along the left edge — the column is "lit from the
+  // upper-left," same convention as every other tile in this game.
+  g.rect(x + 2, y, 1, TILE_SIZE).fill(goldHi);
+
+  // Centre seam — a single darker line down the middle suggests the
+  // cylinder turning past its highlight.
+  g.rect(x + 8, y, 1, TILE_SIZE).fill(goldShadow);
+
+  // Right-side falloff — two adjacent dark stripes give the column visual
+  // depth as it recedes from the light. The outer one is darker to fake a
+  // gradient inside the 32-color palette's limits.
+  g.rect(x + 13, y, 1, TILE_SIZE).fill(goldShadow);
+  g.rect(x + 14, y, 1, TILE_SIZE).fill(goldDeepShadow);
+}
+
+// Solid indoor backdrop for castle / dungeon interiors. Renders a single
+// near-black rectangle the size of the level — sits behind the tilemap, so
+// any empty space inside the keep reads as the deep blackness of a stone
+// hall lit only by candles. Replaces renderRockBackground for the indoor
+// flavor, where the cave-rock texture would read as "dirt on the walls."
+//
+// First cut had faint horizontal bands every 24 rows in `loulou` (a dark
+// plum) for "subtle depth." Against the very dark base they actually read
+// as bright red stripes — wrong. Removed. Phase 3 polish can layer in
+// distant pillar silhouettes or candle-glow halos to break uniformity in
+// a way that reads as ambient atmosphere instead of paint scratches.
+export function renderIndoorBackdrop(width: number, startY: number, endY: number): Graphics {
+  const g = new Graphics();
+  // valhalla — the darkest navy in DB32. Black would feel too flat against
+  // the cool greys of the brickwork; valhalla keeps the room "indoors at
+  // night" without disappearing.
+  g.rect(0, startY, width, endY - startY).fill(DB32.valhalla);
+  return g;
+}
+
+// Crypt backdrop — even darker than indoor-dark. Pure black, for the
+// "candle-lit hideout deep underground" feel. Against the CryptBrick
+// (opal) walls and CryptFloor (verdigris) the black backdrop reads as
+// "you can't see the back of the room" which is exactly what we want.
+export function renderCryptBackdrop(width: number, startY: number, endY: number): Graphics {
+  const g = new Graphics();
+  g.rect(0, startY, width, endY - startY).fill(DB32.black);
+  return g;
 }
 
 // Where the water surface sits inside the tile, at rest.

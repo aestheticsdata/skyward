@@ -9,6 +9,10 @@ import type { Container } from 'pixi.js';
 // unclamped: the player can jump above the world's top row from high
 // platforms, and the Pixi stage background (cornflower) matches the sky, so
 // revealing extra space above the level just looks like more sky.
+//
+// The world bounds are mutable — `setBounds()` reconfigures the clamp when
+// the active level changes (meadow → keep, etc.). One Camera instance per
+// session, reused across transitions.
 export class Camera {
   // Top-left of the viewport in world (logical) pixels.
   readonly pos: Vec2 = { x: 0, y: 0 };
@@ -16,10 +20,18 @@ export class Camera {
   // Where pos is lerping toward. Set by follow().
   readonly target: Vec2 = { x: 0, y: 0 };
 
-  private readonly worldWidth: number;
-  private readonly worldHeight: number;
+  private worldWidth: number;
+  private worldHeight: number;
 
   constructor(tilemap: Tilemap) {
+    this.worldWidth = tilemap.width * TILE_SIZE;
+    this.worldHeight = tilemap.height * TILE_SIZE;
+  }
+
+  // Reconfigure the clamp bounds for a new level. Pos isn't snapped here —
+  // call snap() after the new follow target is set if you want an instant
+  // jump (which Game does on level transitions).
+  setBounds(tilemap: Tilemap): void {
     this.worldWidth = tilemap.width * TILE_SIZE;
     this.worldHeight = tilemap.height * TILE_SIZE;
   }

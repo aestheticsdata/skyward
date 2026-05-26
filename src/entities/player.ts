@@ -276,7 +276,7 @@ export class Player implements Body {
     const cloak = DB32.lightSteel;
     const cloakHi = DB32.white;
     const cloakLo = DB32.heather;
-    const outline = DB32.valhalla;  // 1-px hard silhouette outline
+    const outline = DB32.valhalla; // 1-px hard silhouette outline
     const inside = DB32.valhalla;
     const eye = DB32.twine;
     const boots = DB32.heather;

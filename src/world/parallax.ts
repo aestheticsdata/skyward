@@ -1,5 +1,6 @@
 import { DB32, SCREEN_WIDTH } from '@constants';
 import type { Camera } from '@systems/camera';
+import type { ParallaxFlavor } from '@world/level';
 import { Container, Graphics } from 'pixi.js';
 
 // Y position of the silhouette horizon line, in logical pixels.
@@ -15,13 +16,57 @@ interface ParallaxLayer {
 // A stack of distant hill silhouettes. Each layer is a single Graphics polygon;
 // its x/y is offset every frame by a fraction of the camera position to fake
 // depth. Far layer is drawn first (behind), near layer on top.
+//
+// One instance per session — `rebuild(flavor, widthPx)` swaps the layer set
+// on level transition. The 'meadow' flavor is the outdoor mountain stack
+// (sky + 3 hill silhouettes); the 'keep' flavor renders nothing (an indoor
+// castle has no distant horizon — the rock backdrop in the world container
+// fills any visible gap behind walls).
 export class ParallaxBackground {
   readonly container: Container;
-  private readonly layers: ParallaxLayer[] = [];
+  private layers: ParallaxLayer[] = [];
 
-  constructor(levelWidthPx: number) {
+  constructor(flavor: ParallaxFlavor, levelWidthPx: number) {
     this.container = new Container();
+    this.rebuild(flavor, levelWidthPx);
+  }
 
+  // Replace the layer set for a new level. Clears the existing container,
+  // destroys the old Graphics (Pixi otherwise keeps the GPU buffers around
+  // until next GC), then populates fresh layers per the flavor's recipe.
+  rebuild(flavor: ParallaxFlavor, levelWidthPx: number): void {
+    for (const layer of this.layers) {
+      layer.graphics.destroy();
+    }
+    this.layers = [];
+    this.container.removeChildren();
+
+    if (flavor === 'meadow') {
+      this.buildMeadowLayers(levelWidthPx);
+    } else if (flavor === 'keep') {
+      // Indoor flavor: no sky, no hills. The rock backdrop in the world
+      // container handles every visible "behind the walls" pixel. If we
+      // later want a subtle interior-depth effect (faint distant pillars,
+      // hallway recession), add the layers here.
+    }
+  }
+
+  update(camera: Camera): void {
+    // Float positions — the Application's roundPixels rounds once at render
+    // time. See camera.ts / player.ts for the same reasoning.
+    //
+    // Vertical scroll factor is fixed at 1 (the parallax tracks camera.pos.y
+    // 1:1) so the painted horizon line stays glued to the world's grass row
+    // even when the camera follows the player above the level's top edge.
+    // Without this, jumping from a high platform would expose a band of sky
+    // between the parallax mountains and the grass surface.
+    for (const layer of this.layers) {
+      layer.graphics.x = -camera.pos.x * layer.scrollFactor;
+      layer.graphics.y = -camera.pos.y;
+    }
+  }
+
+  private buildMeadowLayers(levelWidthPx: number): void {
     // Layer width must cover the visible viewport at any camera position:
     //   layer_width >= screen_width + max_camera_x * scroll_factor
     // Using the level width is generous and works for scroll_factor <= 1.
@@ -87,21 +132,6 @@ export class ParallaxBackground {
       }),
       0.6,
     );
-  }
-
-  update(camera: Camera): void {
-    // Float positions — the Application's roundPixels rounds once at render
-    // time. See camera.ts / player.ts for the same reasoning.
-    //
-    // Vertical scroll factor is fixed at 1 (the parallax tracks camera.pos.y
-    // 1:1) so the painted horizon line stays glued to the world's grass row
-    // even when the camera follows the player above the level's top edge.
-    // Without this, jumping from a high platform would expose a band of sky
-    // between the parallax mountains and the grass surface.
-    for (const layer of this.layers) {
-      layer.graphics.x = -camera.pos.x * layer.scrollFactor;
-      layer.graphics.y = -camera.pos.y;
-    }
   }
 
   private addLayer(graphics: Graphics, scrollFactor: number): void {

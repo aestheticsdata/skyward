@@ -1,8 +1,11 @@
 import { DB32, SCREEN_WIDTH, TILE_SIZE } from '@constants';
+import { Bird } from '@entities/bird';
 import type { DecorationSpec } from '@entities/decoration';
 import { Door } from '@entities/door';
 import type { Entity } from '@entities/entity';
+import { Fish } from '@entities/fish';
 import type { LandmarkSpec } from '@entities/landmark';
+import { Rabbit } from '@entities/rabbit';
 import type { LevelSpec, SpawnPoint } from '@world/level';
 
 // Meadow level — the outdoor starting biome.
@@ -53,7 +56,7 @@ const MEADOW_ROWS = [
   'KKKKKKKKKK..KKK........KKKKKKKKKKKKKKKKKKWWWWWWWWKKKKKKKKKKK', // 26
   'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKWWWWWWWWWWKKKKKKKKKK', // 27
   'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKWWWWWWWWWWWWWWKKKKKKKKKKKK', // 28
-  'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKWWWWWWWWWWWWKKKKKKKKKKK', // 29
+  'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKWWWWWWWWWWKKKKKKKKKKKKK', // 29
   'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK', // 30
   'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK', // 31
 ] as const;
@@ -600,6 +603,23 @@ export const meadowLevel: LevelSpec = {
   // can read WorldState flags at construction time to draw in the right
   // initial pose.
   createEntities(): readonly Entity[] {
+    // Player-spawn platform — grass at row 8 cols 8-19. The rabbit paces
+    // back and forth along it. Bounds are passed in pixels: tile-aligned
+    // edges, with a 4-px inset on each side so the rabbit's body never
+    // visibly hangs off the platform edge.
+    const SPAWN_PLATFORM_LEFT_X = 8 * TILE_SIZE + 4;
+    const SPAWN_PLATFORM_RIGHT_X = 20 * TILE_SIZE - 4;
+    const RABBIT_FOOT_Y = MEADOW_GRASS_ROW * TILE_SIZE;
+
+    // DEEP underground lake — the multi-row water column on the right
+    // side of the underground (rows 21-29). NOT the shallow cavern pool
+    // at row 17 that the player wades through.
+    //
+    // The water shape narrows and widens by row, so each fish has its
+    // own minX/maxX matched to the row it swims in. All three are
+    // anchored to their row centre (y = row*16 + 11) so the body fits
+    // comfortably inside the 16-px-tall water tile.
+
     return [
       new Door({
         id: 'meadow-keep-door',
@@ -608,6 +628,90 @@ export const meadowLevel: LevelSpec = {
         targetLevelId: 'old-keep',
         targetSpawnId: 'from-meadow',
         promptLabel: 'enter',
+      }),
+
+      // Rabbit on the player's spawn platform. Walks at 32 px/s — slow
+      // enough to feel like nibbling progress, not racing.
+      new Rabbit({
+        x: 12 * TILE_SIZE,
+        y: RABBIT_FOOT_Y,
+        speed: 32,
+        minX: SPAWN_PLATFORM_LEFT_X,
+        maxX: SPAWN_PLATFORM_RIGHT_X,
+        facing: 1,
+      }),
+
+      // Second rabbit on the LARGEST surface platform (grass cols 23-41,
+      // 19 tiles wide — the wide middle band). Starts on the right side
+      // facing left so the two rabbits don't immediately look like
+      // copies of each other.
+      new Rabbit({
+        x: 36 * TILE_SIZE,
+        y: RABBIT_FOOT_Y,
+        speed: 28,
+        minX: 23 * TILE_SIZE + 4,
+        maxX: 42 * TILE_SIZE - 4,
+        facing: -1,
+      }),
+
+      // Two birds flying back and forth across the FULL width of the
+      // level, high enough above the spawn platform (row 8) that they're
+      // visible from the player's eye-line when standing on the grass —
+      // no jumping needed.
+      //
+      // Flight altitude: row 3 area (y=48..56). The camera at the
+      // spawn shows roughly y=24..248, so this puts the birds in the
+      // upper-third of the screen — clearly in the sky band above any
+      // surface platform.
+      new Bird({
+        x: 8 * TILE_SIZE,
+        y: 3 * TILE_SIZE + 4,
+        speed: 60,
+        minX: 1 * TILE_SIZE,
+        maxX: 59 * TILE_SIZE,
+        facing: 1,
+      }),
+      new Bird({
+        x: 42 * TILE_SIZE,
+        y: 4 * TILE_SIZE + 10,
+        speed: 54,
+        minX: 1 * TILE_SIZE,
+        maxX: 59 * TILE_SIZE,
+        facing: -1,
+      }),
+
+      // Fish near the top of the deep lake — row 22 (water cols 43-48,
+      // 6 wide). Short swim range; reads as a fish hovering near the
+      // shaft mouth.
+      new Fish({
+        x: 46 * TILE_SIZE,
+        y: 22 * TILE_SIZE + 11,
+        speed: 22,
+        minX: 43 * TILE_SIZE + 4,
+        maxX: 49 * TILE_SIZE - 4,
+        facing: 1,
+        color: DB32.tahitiGold,
+      }),
+      // Fish in the middle of the lake — row 25 (water cols 33-47,
+      // 15 wide — the widest band). Longest cruise.
+      new Fish({
+        x: 40 * TILE_SIZE,
+        y: 25 * TILE_SIZE + 11,
+        speed: 26,
+        minX: 33 * TILE_SIZE + 4,
+        maxX: 48 * TILE_SIZE - 4,
+        facing: -1,
+        color: DB32.goldenFizz,
+      }),
+      // Fish near the bottom — row 28 (water cols 34-47, 14 wide).
+      new Fish({
+        x: 41 * TILE_SIZE,
+        y: 28 * TILE_SIZE + 11,
+        speed: 30,
+        minX: 34 * TILE_SIZE + 4,
+        maxX: 48 * TILE_SIZE - 4,
+        facing: 1,
+        color: DB32.clairvoyant,
       }),
     ];
   },

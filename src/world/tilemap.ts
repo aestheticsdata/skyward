@@ -89,8 +89,13 @@ const TILE_COLORS: Record<Tile, number> = {
   [Tile.CryptFloor]: CRYPT_FLOOR,
 };
 
-// Solid tiles block movement. Water is intentionally NOT solid — we want the
-// player to wade through it (no death, no swimming for now; pure visual).
+// Solid tiles block movement. A few are intentionally NOT solid:
+//   - Water: the player wades / swims through it.
+//   - GoldPillar: purely decorative. Drawn into the tilemap so authors
+//     can place ornamental columns straight from the ASCII (`P`) without
+//     spawning a Decoration entity per column, but the player should
+//     walk THROUGH them — they're ambient castle furniture, not the
+//     room's structural skeleton.
 const TILE_SOLID: Record<Tile, boolean> = {
   [Tile.Empty]: false,
   [Tile.Grass]: true,
@@ -100,7 +105,7 @@ const TILE_SOLID: Record<Tile, boolean> = {
   [Tile.Water]: false,
   [Tile.CastleBrick]: true,
   [Tile.CastleFloor]: true,
-  [Tile.GoldPillar]: true,
+  [Tile.GoldPillar]: false,
   [Tile.CryptBrick]: true,
   [Tile.CryptFloor]: true,
 };

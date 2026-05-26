@@ -3,6 +3,7 @@ import type { DecorationSpec } from '@entities/decoration';
 import { Door } from '@entities/door';
 import type { Entity } from '@entities/entity';
 import type { LandmarkSpec } from '@entities/landmark';
+import { Pumpkin } from '@entities/pumpkin';
 import { TallCandle } from '@entities/tall-candle';
 import type { LevelSpec, SpawnPoint } from '@world/level';
 import type { Graphics } from 'pixi.js';
@@ -43,9 +44,9 @@ import type { Graphics } from 'pixi.js';
 const OLD_KEEP_ROWS = [
   'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB', //  0  ceiling top
   'BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB', //  1  ceiling underside
-  'BB.........................................................BB', //  2  upper room
-  'BB.........................................................BB', //  3
-  'BB.........................................................BB', //  4
+  'BB.....PP......PP......PP..................................BB', //  2  upper room
+  'BB.....PP......PP......PP..................................BB', //  3
+  'BB.....PP......PP......PP..................................BB', //  4
   'BB.....PP......PP......PP..................................BB', //  5  upper-floor columns (capitals)
   'BB.....PP......PP......PP..................................BB', //  6
   'BB.....PP......PP......PP..................................BB', //  7  upper-floor columns (bases)
@@ -55,10 +56,10 @@ const OLD_KEEP_ROWS = [
   'BBFFFFFFFFFFFFFFFFFFFFFFFFFFFF.........FF..................BB', // 11
   'BB...................................FF....................BB', // 12  step 3 floating (cols 31-32)
   'BB.................................FF......................BB', // 13
-  'BB...............................FF........................BB', // 14  step 2 floating (cols 33-34)
-  'BB.........................................................BB', // 15
-  'BB.....................................FF..................BB', // 16  step 1 floating (cols 35-36)
-  'BB....PP......PP......PP......PP...........................BB', // 17  lower-room columns
+  'BBFFFFFFFFFFFFFFFFFFFFFFFF.......FF........................BB', // 14  step 2 floating (cols 33-34)
+  'BB....PP......PP......PP...................................BB', // 15
+  'BB....PP......PP......PP...............FF..................BB', // 16  step 1 floating (cols 35-36)
+  'BB....PP......PP......PP...................................BB', // 17  lower-room columns
   'BBFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF..FFFFFFFFFFFFFFFFFFFFFBB', // 18  LOWER FLOOR (cols 2-35, 38-47) — hole at 36-37
   'BB.........................................................BB', // 19  basement chamber (top)
   'BB.......................................F.................BB', // 20  basement climb-out step (col 41)
@@ -386,6 +387,16 @@ export const oldKeepLevel: LevelSpec = {
       new TallCandle(26 * TILE_SIZE + 8, UPPER_FLOOR_Y),
       new TallCandle(14 * TILE_SIZE + 8, BASEMENT_FLOOR_Y),
       new TallCandle(30 * TILE_SIZE + 8, BASEMENT_FLOOR_Y),
+      // Small hopping pumpkin on the lower-floor entry hall. Stays in
+      // the LEFT half of the floor (cols 8-28) — well clear of the
+      // basement-entry hole at cols 36-37.
+      new Pumpkin({
+        x: 16 * TILE_SIZE,
+        y: LOWER_FLOOR_Y,
+        minX: 8 * TILE_SIZE + 4,
+        maxX: 28 * TILE_SIZE - 4,
+        facing: 1,
+      }),
     ];
   },
 };

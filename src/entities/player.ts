@@ -210,7 +210,15 @@ export class Player implements Body {
         this.vel.y = -JUMP_VELOCITY;
         this.coyoteTimer = 0;
         this.jumpBufferTimer = 0;
-        this.didJumpThisFrame = true;
+        // Suppress the jump SFX when there's a solid tile immediately
+        // above the player's head — typical case: walking inside a
+        // 1-tile-tall passage. The velocity above will be zeroed by the
+        // ceiling collision in stepPhysics, so the player doesn't
+        // visibly move; playing the "jump up" sound in that case feels
+        // wrong because nothing actually happened.
+        if (!hasCeilingAboveHead(this.pos, this.size, tilemap)) {
+          this.didJumpThisFrame = true;
+        }
       }
 
       if (this.vel.y < 0 && input.isAnyReleased(KEYS_JUMP)) {
@@ -376,4 +384,20 @@ export class Player implements Body {
     // into every pixel of the Graphics in one shot.
     this.sprite.tint = this.bodyTouchesWater ? SUBMERGED_TINT : 0xffffff;
   }
+}
+
+// True if there is a solid tile in the row immediately above the player's
+// AABB top edge — i.e. a ceiling right on the head. Used to skip the jump
+// SFX in 1-tile-tall passages where the jump impulse would be zeroed by
+// ceiling collision in the same frame. The 1-px horizontal inset matches
+// resolveY's inset in physics.ts so the column range checked here is
+// exactly the column range that would actually collide.
+function hasCeilingAboveHead(pos: Vec2, size: Vec2, tilemap: Tilemap): boolean {
+  const tileLeft = Math.floor((pos.x + 1) / TILE_SIZE);
+  const tileRight = Math.floor((pos.x + size.x - 1) / TILE_SIZE);
+  const tileY = Math.floor((pos.y - 1) / TILE_SIZE);
+  for (let tx = tileLeft; tx <= tileRight; tx++) {
+    if (tilemap.isSolid(tx, tileY)) return true;
+  }
+  return false;
 }

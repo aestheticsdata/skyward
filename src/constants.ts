@@ -57,7 +57,7 @@ export const GRAVITY_FALL_MULT = 1.6; // gravity multiplier while falling (snapp
 export const JUMP_VELOCITY = 300; // initial upward speed when jumping
 export const JUMP_RELEASE_MULT = 0.5; // upward velocity is cut by this when jump key is released early
 export const TERMINAL_VELOCITY = 450; // max downward speed in px/s
-export const WALK_SPEED = 96; // horizontal max speed
+export const WALK_SPEED = 72; // horizontal max speed (was 96 — felt "100 à l'heure")
 export const COYOTE_TIME = 0.08; // grace period to still jump after walking off a ledge
 export const JUMP_BUFFER = 0.1; // grace period for jump press just before landing
 

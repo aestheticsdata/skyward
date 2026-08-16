@@ -36,7 +36,7 @@ async function main(): Promise<void> {
   const game = new Game(app);
   game.start();
 
-  console.log('The Cartographer — phase 2 running.');
+  console.log('Loamkeep — phase 2 running.');
 }
 
 main().catch((err) => {

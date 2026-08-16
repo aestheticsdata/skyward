@@ -1,9 +1,9 @@
-# The Cartographer
+# Loamkeep
 
 A 16-bit-style 2D exploration platformer, in the lineage of Rick Dangerous and
 Prince of Persia — but with **no enemies, no traps, and no death**. The focus is
 mood, atmosphere, and discovery rather than challenge. You play a hooded
-cartographer wandering a small world; landmarks log into a sketchbook as you
+wanderer exploring a small world; landmarks log into a sketchbook as you
 find them.
 
 > Status: playable vertical slice. Three connected levels (meadow → old keep →
@@ -104,7 +104,7 @@ src/
 - **Platformer feel tricks**: coyote time, jump buffer, variable jump height
   (tap = hop, hold = full jump), asymmetric gravity (lighter rising, heavier
   falling). All tunable from `constants.ts`.
-- **Procedural character animation**: the hooded cartographer is rebuilt from
+- **Procedural character animation**: the hooded wanderer is rebuilt from
   `rect()` primitives every frame, with three poses (idle / walk / jump) and a
   1-pixel walk cycle (two alternating feet, vertical body bob, counter-phase
   arm). Pure integer-pixel offsets — no scale tricks, stays pixel-perfect at

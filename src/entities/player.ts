@@ -269,7 +269,7 @@ export class Player implements Body {
   // 1-pixel integer offsets. Stays pixel-perfect — no scale-based animation.
   // Cost is ~20 rect() calls/frame.
   //
-  // Visual brief: a small hooded cartographer in a pale near-white cloak,
+  // Visual brief: a small hooded wanderer in a pale near-white cloak,
   // with two gray-white boots and a darker satchel strap doubling as the
   // visible arm. The 1-pixel hard outline along the cloak and hood sides
   // is what reads as "Amiga sprite" rather than "Minecraft block" — the

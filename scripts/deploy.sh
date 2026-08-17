@@ -5,10 +5,15 @@ set -Eeuo pipefail
 # Configuration
 ######################################
 REMOTE_USER_HOST="${REMOTE_USER_HOST:-debian@ks-b}"
-WEB_ROOT_BASE="${WEB_ROOT_BASE:-/var/www/1991computer/loamkeep}"
-CURRENT_DIR="$WEB_ROOT_BASE"
-BACKUP_DIR="${BACKUP_DIR:-${WEB_ROOT_BASE}.bak}"
-RELEASES_DIR="$WEB_ROOT_BASE/releases"
+# Everything loamkeep owns on ks-b lives INSIDE this folder — live root front/, history
+# front-releases/, backup front.bak/ — mirroring bkmk's layout, so /var/www holds exactly one
+# entry per app. Releases and backup sit OUTSIDE the live root on purpose: the release switch
+# empties front/ wholesale, and anything stored inside it would ride into the backup. Same fix
+# as Shatter's SHA-38 and SHA-37, where this script came from.
+WEB_ROOT_BASE="${WEB_ROOT_BASE:-/var/www/loamkeep}"
+CURRENT_DIR="$WEB_ROOT_BASE/front"
+BACKUP_DIR="${BACKUP_DIR:-$WEB_ROOT_BASE/front.bak}"
+RELEASES_DIR="$WEB_ROOT_BASE/front-releases"
 HEALTHCHECK_URL="${HEALTHCHECK_URL:-https://loamkeep.1991computer.com/}"
 EXPECTED_HTML_MARKER="${EXPECTED_HTML_MARKER:-Loamkeep}"
 MAX_RELEASES_TO_KEEP="${MAX_RELEASES_TO_KEEP:-20}"
@@ -42,9 +47,9 @@ ZEUS_ECOSYSTEM_FILE="${ZEUS_ECOSYSTEM_FILE:-/var/www/zeus/ecosystem.config.js}"
 ZEUS_ENV_FILE="${ZEUS_ENV_FILE:-/var/www/zeus/nest-api/.env}"
 
 # The last successfully deployed commit — the base of the next report's commit range. It lives in
-# releases/ because that is the one directory the release switch and both rollbacks all preserve:
-# the live root itself is emptied on every switch, so a marker there would ride into the backup.
-# The prune only deletes directories, so it never collects this file.
+# the releases dir, outside the live root: the live root is emptied into the backup on every
+# switch, so a marker kept there would ride into the backup. The prune only deletes directories,
+# so it never collects this file.
 ZEUS_MARKER="$RELEASES_DIR/.zeus-last-$ZEUS_ROLE"
 
 ######################################
@@ -357,7 +362,6 @@ remote_activate_from_dir() {
   local source_dir="$1"
 
   ssh "$REMOTE_USER_HOST" \
-    WEB_ROOT_BASE="$WEB_ROOT_BASE" \
     CURRENT_DIR="$CURRENT_DIR" \
     BACKUP_DIR="$BACKUP_DIR" \
     SOURCE_DIR="$source_dir" \
@@ -369,27 +373,11 @@ if [ ! -d "$SOURCE_DIR" ]; then
   exit 1
 fi
 
-ACTIVATION_SOURCE_DIR="$(dirname "$CURRENT_DIR")/.activation_source_$(date +%s%N)"
-rm -rf "$ACTIVATION_SOURCE_DIR"
-mkdir -p "$ACTIVATION_SOURCE_DIR"
-trap 'rm -rf "$ACTIVATION_SOURCE_DIR"' EXIT
-
-# Copy the release outside the live directory first so the switch can
-# manipulate the live tree safely without invalidating the source path.
-cp -a "$SOURCE_DIR"/. "$ACTIVATION_SOURCE_DIR"/
-
+# The live root holds served files and nothing else — releases and backup are siblings of it,
+# so emptying it wholesale is safe and the release source stays valid throughout the switch.
 mkdir -p "$CURRENT_DIR"
-mkdir -p "$(dirname "$BACKUP_DIR")"
 rm -rf "$BACKUP_DIR"
 mkdir -p "$BACKUP_DIR"
-
-cd "$WEB_ROOT_BASE"
-
-TMP_RELEASES_DIR="$WEB_ROOT_BASE/.releases_tmp_switch"
-if [ -d "$CURRENT_DIR/releases" ]; then
-  rm -rf "$TMP_RELEASES_DIR"
-  mv "$CURRENT_DIR/releases" "$TMP_RELEASES_DIR"
-fi
 
 cd "$CURRENT_DIR"
 shopt -s dotglob
@@ -398,17 +386,12 @@ if compgen -G "*" > /dev/null; then
 fi
 shopt -u dotglob
 
-if [ -d "$TMP_RELEASES_DIR" ]; then
-  mv "$TMP_RELEASES_DIR" "$CURRENT_DIR/releases"
-fi
-
-cp -a "$ACTIVATION_SOURCE_DIR"/. "$CURRENT_DIR"/
+cp -a "$SOURCE_DIR"/. "$CURRENT_DIR"/
 __REMOTE_ACTIVATE__
 }
 
 remote_rollback_backup() {
   ssh "$REMOTE_USER_HOST" \
-    WEB_ROOT_BASE="$WEB_ROOT_BASE" \
     CURRENT_DIR="$CURRENT_DIR" \
     BACKUP_DIR="$BACKUP_DIR" \
     'bash -s' <<'__REMOTE_ROLLBACK__'
@@ -420,26 +403,11 @@ if [ ! -d "$BACKUP_DIR" ]; then
 fi
 
 mkdir -p "$CURRENT_DIR"
-cd "$WEB_ROOT_BASE"
-
-TMP_RELEASES_DIR="$WEB_ROOT_BASE/.releases_tmp_rollback"
-if [ -d "$CURRENT_DIR/releases" ]; then
-  rm -rf "$TMP_RELEASES_DIR"
-  mv "$CURRENT_DIR/releases" "$TMP_RELEASES_DIR"
-fi
-
 cd "$CURRENT_DIR"
 shopt -s dotglob
 if compgen -G "*" > /dev/null; then
   rm -rf * 2>/dev/null || true
 fi
-shopt -u dotglob
-
-if [ -d "$TMP_RELEASES_DIR" ]; then
-  mv "$TMP_RELEASES_DIR" "$CURRENT_DIR/releases"
-fi
-
-shopt -s dotglob
 if compgen -G "$BACKUP_DIR/*" > /dev/null; then
   mv "$BACKUP_DIR"/* "$CURRENT_DIR"/ 2>/dev/null || true
 fi

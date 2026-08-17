@@ -197,14 +197,17 @@ Other actions:
 ./scripts/deploy.sh rollback-to release-YYYYMMDD-HHMMSS-branch-hash
 ```
 
-- Target host default: `debian@ks-b`, path `/var/www/1991computer/loamkeep`
-  (URL `https://loamkeep.1991computer.com/`). Same release mechanics as
+- Target host default: `debian@ks-b`, app folder `/var/www/loamkeep`
+  (URL `https://loamkeep.1991computer.com/`). Everything lives inside it,
+  bkmk-style: live root `front/` (the nginx root), versioned history
+  `front-releases/`, previous version `front.bak/`. Same release mechanics as
   Shatter's deploy, which this script was ported from.
 - The deploy refuses a dirty tree or a `HEAD` not level with `origin/master`,
   then typechecks and builds locally (`tsc --noEmit` + `vite build --base=./`)
-  and uploads `dist/` to a versioned `releases/release-<timestamp>-<branch>-<hash>`
-  with `release.json` metadata. The previous live version is kept as `.bak`
-  and restored automatically if the healthcheck fails.
+  and uploads `dist/` to a versioned
+  `front-releases/release-<timestamp>-<branch>-<hash>` with `release.json`
+  metadata. The previous live version is kept as `front.bak` and restored
+  automatically if the healthcheck fails.
 - Healthcheck marker in the deployed HTML: `Loamkeep` (the page title).
 - Every deploy and rollback is reported to Zeus (app `loamkeep`, role `front`),
   like the other 1991computer apps.

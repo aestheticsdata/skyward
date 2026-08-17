@@ -181,6 +181,34 @@ Then open http://127.0.0.1:5173.
 | `pnpm format` | Biome: format only |
 | `pnpm lint` | Biome: lint only |
 
+## Deployment
+
+Deploy to production (versioned release + auto rollback on failure):
+
+```sh
+./scripts/deploy.sh deploy
+```
+
+Other actions:
+
+```sh
+./scripts/deploy.sh rollback
+./scripts/deploy.sh list-releases
+./scripts/deploy.sh rollback-to release-YYYYMMDD-HHMMSS-branch-hash
+```
+
+- Target host default: `debian@ks-b`, path `/var/www/1991computer/loamkeep`
+  (URL `https://loamkeep.1991computer.com/`). Same release mechanics as
+  Shatter's deploy, which this script was ported from.
+- The deploy refuses a dirty tree or a `HEAD` not level with `origin/master`,
+  then typechecks and builds locally (`tsc --noEmit` + `vite build --base=./`)
+  and uploads `dist/` to a versioned `releases/release-<timestamp>-<branch>-<hash>`
+  with `release.json` metadata. The previous live version is kept as `.bak`
+  and restored automatically if the healthcheck fails.
+- Healthcheck marker in the deployed HTML: `Loamkeep` (the page title).
+- Every deploy and rollback is reported to Zeus (app `loamkeep`, role `front`),
+  like the other 1991computer apps.
+
 ## Controls
 
 - **Move**: ← → / A D / Q D (AZERTY)
